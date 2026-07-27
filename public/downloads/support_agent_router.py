@@ -485,7 +485,43 @@ def configure_api_key(api_key: str) -> None:
         from agents import set_default_openai_client
         from openai import AsyncOpenAI
 
-        set_default_openai_client(AsyncOpenAI(api_key=api_key, base_url=base_url))
+        if sys.platform == "emscripten":
+            import httpx
+            from pyodide.http import pyfetch
+
+            class PyfetchTransport(httpx.AsyncBaseTransport):
+                """Bridge httpx to the browser Fetch API used by Pyodide."""
+
+                async def handle_async_request(self, request):
+                    blocked = {b"connection", b"content-length", b"host"}
+                    headers = {
+                        name.decode(): value.decode()
+                        for name, value in request.headers.raw
+                        if name.lower() not in blocked
+                    }
+                    response = await pyfetch(
+                        str(request.url),
+                        method=request.method,
+                        headers=headers,
+                        body=(await request.aread()).decode(),
+                    )
+                    return httpx.Response(
+                        response.status,
+                        headers=response.headers,
+                        content=await response.bytes(),
+                        request=request,
+                    )
+
+            http_client = httpx.AsyncClient(transport=PyfetchTransport())
+            set_default_openai_client(
+                AsyncOpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    http_client=http_client,
+                )
+            )
+        else:
+            set_default_openai_client(AsyncOpenAI(api_key=api_key, base_url=base_url))
         return
     set_default_openai_key(api_key, use_for_tracing=False)
 
