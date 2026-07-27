@@ -48,7 +48,7 @@ async function run(command) {
   const pyodide = await runtimePromise;
   pyodide.globals.set("_run_spec_json", JSON.stringify({ file, args }));
   pyodide.globals.set("_openai_base_url", file === "support_agent_router.py" ? apiBase : "");
-  const proxy = pyodide.runPython(`
+  const proxy = await pyodide.runPythonAsync(`
 import contextlib
 import io
 import json

@@ -431,15 +431,27 @@ def invoke_agent(agent, message: str) -> str:
     Invoke one Agents SDK agent and return final_output as a string.
     Keep this wrapper small so the SDK boundary is clear.
     """
-    output = Runner.run_sync(
-        agent,
-        json.dumps({"untrusted_customer_content": message}, ensure_ascii=False),
-        max_turns=1,
-        run_config=RunConfig(
-            tracing_disabled=True,
-            trace_include_sensitive_data=False,
-        ),
-    ).final_output
+    input_data = json.dumps(
+        {"untrusted_customer_content": message},
+        ensure_ascii=False,
+    )
+    run_config = RunConfig(
+        tracing_disabled=True,
+        trace_include_sensitive_data=False,
+    )
+    if sys.platform == "emscripten":
+        from pyodide.ffi import run_sync
+
+        output = run_sync(
+            Runner.run(agent, input_data, max_turns=1, run_config=run_config)
+        ).final_output
+    else:
+        output = Runner.run_sync(
+            agent,
+            input_data,
+            max_turns=1,
+            run_config=run_config,
+        ).final_output
     if isinstance(output, BaseModel):
         return output.model_dump_json()
     return "" if output is None else str(output)
@@ -487,10 +499,10 @@ def configure_api_key(api_key: str) -> None:
 
         if sys.platform == "emscripten":
             import httpx
-            from pyodide.http import pyxhr
+            from pyodide.http import pyfetch
 
-            class PyxhrTransport(httpx.AsyncBaseTransport):
-                """Bridge httpx to synchronous XHR inside the browser worker."""
+            class PyfetchTransport(httpx.AsyncBaseTransport):
+                """Bridge httpx to the browser Fetch API used by Pyodide."""
 
                 async def handle_async_request(self, request):
                     blocked = {b"connection", b"content-length", b"host"}
@@ -499,19 +511,20 @@ def configure_api_key(api_key: str) -> None:
                         for name, value in request.headers.raw
                         if name.lower() not in blocked
                     }
-                    response = getattr(pyxhr, request.method.casefold())(
+                    response = await pyfetch(
                         str(request.url),
+                        method=request.method,
                         headers=headers,
-                        data=(await request.aread()).decode(),
+                        body=(await request.aread()).decode(),
                     )
                     return httpx.Response(
-                        response.status_code,
+                        response.status,
                         headers=response.headers,
-                        content=response.content,
+                        content=await response.bytes(),
                         request=request,
                     )
 
-            http_client = httpx.AsyncClient(transport=PyxhrTransport())
+            http_client = httpx.AsyncClient(transport=PyfetchTransport())
             set_default_openai_client(
                 AsyncOpenAI(
                     api_key=api_key,
