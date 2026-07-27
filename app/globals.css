@@ -708,6 +708,9 @@ td code { color: #b8d2ff; font-weight: 800; }
   background: #070d16;
 }
 .terminal-key-panel summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
   color: #9eb8dc;
   font-size: 12px;
   cursor: pointer;
@@ -754,7 +757,7 @@ td code { color: #b8d2ff; font-weight: 800; }
   border-top: 1px solid #1c2a3d;
 }
 .terminal-app label { color: #83b5ff; white-space: nowrap; }
-.terminal-app input { min-height: 34px; flex: 1; padding: 0; border: 0; background: transparent; color: #eef5ff; outline: 0; }
+.terminal-app input { min-height: 44px; flex: 1; padding: 0; border: 0; background: transparent; color: #eef5ff; outline: 0; }
 .terminal-app input:disabled { cursor: wait; }
 
 .doom-app { height: 100%; display: grid; grid-template-rows: 1fr 48px; background: #050505; }
