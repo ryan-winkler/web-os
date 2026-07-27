@@ -48,10 +48,36 @@ main { min-height: 100vh; overflow: hidden; position: relative; }
   gap: 36px;
   border-bottom: 1px solid var(--border);
   padding: 0 clamp(22px, 5vw, 76px);
-  position: relative;
-  z-index: 10;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(10, 10, 15, .94);
+  backdrop-filter: blur(12px);
 }
-.wordmark { font-weight: 900; letter-spacing: -.04em; font-size: 19px; }
+.skip-link {
+  position: fixed;
+  top: -60px;
+  left: 16px;
+  z-index: 60;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  color: #050509;
+  background: var(--cyan);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.skip-link:focus { top: 12px; }
+.wordmark {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  font-size: 19px;
+}
 .wordmark span, h2 span, h1 em { color: var(--green); font-style: normal; }
 .navlinks { display: flex; gap: 30px; margin-left: auto; }
 .navlinks a, .nav-download {
@@ -63,6 +89,7 @@ main { min-height: 100vh; overflow: hidden; position: relative; }
   text-transform: uppercase;
   letter-spacing: .11em;
 }
+.navlinks a { min-width: 44px; justify-content: center; }
 .navlinks a:hover, .navlinks a:focus-visible { color: var(--green); }
 .nav-download { color: #050509; background: var(--green); padding: 0 18px; font-weight: 800; }
 .nav-download:hover { box-shadow: 0 0 24px rgba(0,255,136,.35); }
@@ -184,7 +211,13 @@ h1::after {
   padding: 110px clamp(22px, 7vw, 112px);
   border-bottom: 1px solid var(--border);
   position: relative;
+  scroll-margin-top: 80px;
 }
+
+body:has(#brief:target) .navlinks a[href="#brief"],
+body:has(#architecture:target) .navlinks a[href="#architecture"],
+body:has(#console:target) .navlinks a[href="#console"],
+body:has(#install:target) .navlinks a[href="#install"] { color: var(--green); }
 .section-label {
   color: var(--green);
   font-size: 12px;
@@ -337,8 +370,28 @@ footer h2 { font-size: clamp(32px, 4vw, 60px); }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 
 @media (max-width: 960px) {
-  .navlinks { display: none; }
-  .nav-download { margin-left: auto; }
+  .topbar {
+    height: auto;
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0;
+  }
+  .wordmark { grid-column: 1; grid-row: 1; min-height: 64px; }
+  .nav-download { grid-column: 2; grid-row: 1; margin: 0; align-self: center; }
+  .navlinks {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    width: 100%;
+    margin: 0;
+    gap: 16px;
+    justify-content: space-between;
+    overflow-x: auto;
+    border-top: 1px solid var(--border);
+  }
+  .navlinks a { flex: 1 0 auto; }
+  .section { scroll-margin-top: 128px; }
   .hero { grid-template-columns: 1fr; min-height: auto; }
   .hero-terminal { max-width: 680px; width: 100%; }
   .brief-grid, .section-head, .console-grid, .install-grid, .sources-grid { grid-template-columns: 1fr; gap: 42px; }
@@ -351,8 +404,10 @@ footer h2 { font-size: clamp(32px, 4vw, 60px); }
 }
 
 @media (max-width: 620px) {
-  .topbar { height: 64px; padding-inline: 18px; }
-  .nav-download { font-size: 9px; padding-inline: 12px; }
+  .topbar { padding-inline: 18px; }
+  .nav-download { font-size: 12px; padding-inline: 12px; }
+  .navlinks { gap: 8px; }
+  .navlinks a { font-size: 12px; letter-spacing: .04em; }
   .hero, .section { padding: 72px 20px; }
   h1 { font-size: clamp(48px, 15.5vw, 72px); }
   .hero-actions { flex-direction: column; }

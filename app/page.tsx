@@ -80,6 +80,7 @@ export default function Home() {
   return (
     <main>
       <div className="scanlines" aria-hidden="true" />
+      <a className="skip-link" href="#console">Skip to routing console</a>
       <nav className="topbar" aria-label="Primary navigation">
         <a className="wordmark" href="#top">SAR<span>{"//"}</span>01</a>
         <div className="navlinks">
