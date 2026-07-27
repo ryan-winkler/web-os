@@ -43,6 +43,10 @@ python support_agent_router.py \
   "We receive 429 errors when traffic spikes."
 ```
 
+That original one-shot path invokes `TriageAgent`, then exactly one specialist,
+and prints only the selected agent, agent flow, answer, and recommended next
+action. Invalid triage output routes to `FallbackAgent`.
+
 Prepare a reply without sending it:
 
 ```bash
@@ -51,9 +55,10 @@ python support_agent_router.py \
   "Requests are timing out and the customer is frustrated."
 ```
 
-The workflow detects multiple issues in one customer message, asks the triage
-agent to select exactly one specialist for each issue, and prepares a concise
-reply. The CLI offers Draft Reply, Revise, and Send Reply. Send Reply is
+The extended workflow detects multiple issues in one customer message, uses
+`MultiIssueTriageAgent` to select exactly one specialist for each issue, and
+prepares a concise reply. The CLI offers Draft Reply, Revise, and Send Reply.
+Send Reply is
 intentionally unavailable until an authenticated customer messaging boundary
 is connected; it fails closed and offers to save the draft.
 
@@ -65,7 +70,7 @@ python test_pure.py
 
 The pure suite exercises parsing, deterministic routing helpers, logging
 formatting, security boundaries, and printable output without network access.
-It currently runs 18 tests. The SDK boundary has separate mocked tests:
+It currently runs 22 tests. The SDK boundary has separate mocked tests:
 
 ```bash
 python test_support_agent_router.py
@@ -80,8 +85,9 @@ OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
 bare `python3 support_agent_router.py` command uses browser-native customer
 prompts before invoking the real one-shot script, because a Web Worker has no
 interactive stdin. Press Tab to complete commands, filenames, apps, and reply
-modes. The
-terminal can hold an API key inside its isolated Web Worker for the current tab
+modes. Without a key, the terminal reports the missing Agents SDK configuration
+directly rather than inventing routing results. The terminal can hold an API key
+inside its isolated Web Worker for the current tab
 only and can explicitly discard that worker. It does not place the key in
 React state, terminal history, local storage, logs, or downloads. A public
 browser app cannot offer the same protection as a local environment variable,

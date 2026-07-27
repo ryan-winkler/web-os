@@ -80,7 +80,12 @@ class RouterPureTests(unittest.TestCase):
         self.assertEqual("APIErrorAgent", routes[0].specialist_name)
         self.assertEqual("FallbackAgent", routes[1].specialist_name)
         self.assertEqual(
-            {"TriageAgent", "ReplyAgent", *router.SPECIALIST_NAMES},
+            {
+                "TriageAgent",
+                "MultiIssueTriageAgent",
+                "ReplyAgent",
+                *router.SPECIALIST_NAMES,
+            },
             set(router.AGENT_KNOWLEDGE_GRAPH),
         )
         agents = router.build_agents()
@@ -281,7 +286,11 @@ class RouterPureTests(unittest.TestCase):
             result = router.process_customer("A problem.", router.build_agents())
         self.assertTrue(result.triage_failed)
         self.assertEqual(1, invoke.call_count)
-        self.assertIn("Triage unavailable", result.text)
+        self.assertIn("Error: OpenAI Agents SDK triage did not complete.", result.text)
+        self.assertIn("Next action:", result.text)
+        self.assertNotIn("Customer:", result.text)
+        self.assertNotIn("Customer summary:", result.text)
+        self.assertNotIn("Issues found:", result.text)
 
     def test_11_specialist_failure_continues_and_formats_all_fields(self):
         with patch.object(
@@ -316,7 +325,7 @@ class RouterPureTests(unittest.TestCase):
         self.assertEqual(1, result.specialist_failures)
         self.assertIn("Unable to generate a specialist answer", result.text)
         for field in (
-            "Customer:",
+            "Customer ID:",
             "Customer summary:",
             "Issues found:",
             "Selected agent:",
@@ -628,6 +637,114 @@ class RouterPureTests(unittest.TestCase):
             "sk-proj-abcdefghijklmnop",
             use_for_tracing=False,
         )
+
+    def test_19_original_single_issue_contract_is_preserved(self):
+        agents = router.build_agents()
+        allowed = {
+            "RateLimitAgent",
+            "LatencyAgent",
+            "UsageCostAgent",
+            "APIErrorAgent",
+            "FallbackAgent",
+        }
+        self.assertIn("Return only one of these exact names", agents["TriageAgent"].instructions)
+        self.assertIsNone(agents["TriageAgent"].output_type)
+
+        with patch.object(
+            router,
+            "invoke_agent",
+            side_effect=[
+                "RateLimitAgent",
+                specialist_json(
+                    "Reduce burst concurrency.",
+                ),
+            ],
+        ) as invoke:
+            output = router.run_once("429 during a burst")
+
+        self.assertEqual(2, invoke.call_count)
+        self.assertEqual("TriageAgent", invoke.call_args_list[0].args[0].name)
+        self.assertEqual("RateLimitAgent", invoke.call_args_list[1].args[0].name)
+        self.assertEqual(
+            (
+                "Selected agent: RateLimitAgent\n"
+                "Agent flow: TriageAgent -> RateLimitAgent\n"
+                "Answer: Reduce burst concurrency.\n"
+                "Recommended next action: Take the next step."
+            ),
+            output,
+        )
+        for selected in allowed:
+            with self.subTest(selected=selected):
+                with patch.object(router, "invoke_agent", return_value=selected):
+                    self.assertEqual(selected, router.select_agent("issue", agents))
+        with patch.object(router, "invoke_agent", return_value="InventedAgent"):
+            self.assertEqual("FallbackAgent", router.select_agent("issue", agents))
+
+    def test_20_empty_customer_id_is_not_rendered(self):
+        triage = router.TriageOutput(
+            customer_summary="One issue.",
+            issues=[],
+        )
+        report = router.format_report(
+            "",
+            triage,
+            [],
+            [
+                router.RouteItem(
+                    issue_id="issue-001",
+                    summary="429 during a burst.",
+                    specialist_name="RateLimitAgent",
+                    confidence=1,
+                    recommended_owner="API Support",
+                    answer="Reduce concurrency.",
+                    next_action="Add bounded backoff.",
+                )
+            ],
+        )
+        self.assertNotIn("Customer:", report)
+        self.assertNotIn("(not provided)", report)
+
+    def test_21_whole_issue_is_not_accepted_as_a_customer_fact(self):
+        message = "429 during a burst"
+        parsed = router.parse_triage_output(
+            triage_json(
+                [
+                    {
+                        "summary": message,
+                        "specialist_name": "RateLimitAgent",
+                        "confidence": 1,
+                    }
+                ],
+                facts=[
+                    {
+                        "name": "organization",
+                        "value": message,
+                        "evidence": message,
+                    }
+                ],
+            ),
+            message,
+        )
+        self.assertEqual([], parsed.stated_customer_facts)
+
+    def test_22_default_cli_uses_the_original_run_once_path(self):
+        output = (
+            "Selected agent: RateLimitAgent\n"
+            "Agent flow: TriageAgent -> RateLimitAgent\n"
+            "Answer: Retry with backoff.\n"
+            "Recommended next action: Reduce burst concurrency."
+        )
+        with (
+            patch("sys.argv", ["support_agent_router.py", "429 during a burst"]),
+            patch.object(router, "run_once", return_value=output) as run_once,
+            patch.object(router, "configure_logging") as configure_logging,
+            patch("builtins.print") as printed,
+        ):
+            self.assertEqual(0, router.main())
+        run_once.assert_called_once_with("429 during a burst", "gpt-4.1-mini")
+        configure_logging.assert_not_called()
+        printed.assert_called_once_with(output)
 
 
 if __name__ == "__main__":

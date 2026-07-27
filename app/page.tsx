@@ -2558,7 +2558,7 @@ function DecisionMarkdownApp() {
       </ol>
 
       <h2>Evidence</h2>
-      <pre><code>python3 test_pure.py{"\n"}# 18 tests · 0 network</code></pre>
+      <pre><code>python3 test_pure.py{"\n"}# 22 tests · 0 network</code></pre>
       <p>
         Specialist learning context is restricted to the OpenAI Developer Docs, Cookbook, and Learn surfaces.
       </p>

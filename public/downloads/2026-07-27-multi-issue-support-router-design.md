@@ -9,8 +9,13 @@ context, manual routing overrides, and explicit feedback capture.
 
 ## Agent roles
 
-`TriageAgent` reads the complete customer message once and returns structured,
-validated issue entries. Each entry contains:
+`TriageAgent` preserves the original interview contract: for one issue it
+returns only one of the five exact specialist names. `run_once()` invokes that
+agent first and then invokes exactly one selected specialist.
+
+`MultiIssueTriageAgent` is the optional extension. It reads a complete customer
+message once and returns structured, validated issue entries. Each entry
+contains:
 
 - A concise statement of what the customer appears to be reporting.
 - Exactly one recommended specialist name.
@@ -37,19 +42,20 @@ one customer-facing subject and body after routing is complete.
 Use code-controlled orchestration rather than SDK handoffs:
 
 1. Build fresh agents for each CLI invocation.
-2. Invoke `TriageAgent` once for the full customer message.
-3. Validate its structured output.
-4. For each detected issue, select the recommended specialist automatically or
+2. For the original one-shot path, invoke `TriageAgent`, validate one allowed
+   name, then invoke exactly one specialist.
+3. For the extended path, invoke `MultiIssueTriageAgent` once for the full
+   customer message.
+4. Validate its structured output.
+5. For each detected issue, select the recommended specialist automatically or
    prompt for a manual override.
-5. Invoke exactly one specialist for each detected issue.
-6. Render one combined internal plain-text result.
-7. On request, invoke `ReplyAgent` once to prepare customer-facing copy.
-8. Require a person to review, revise, save, or attempt delivery.
+6. Invoke exactly one specialist for each detected issue.
+7. Render one combined internal plain-text result.
+8. On request, invoke `ReplyAgent` once to prepare customer-facing copy.
+9. Require a person to review, revise, save, or attempt delivery.
 
 Specialists run sequentially to keep API usage and burst concurrency predictable.
 No conversation or session state is retained between CLI calls.
-Each runner invocation is limited to one model turn. Agents have capped output,
-no tools, and no handoffs.
 
 The original public functions remain available: `build_agents`, `invoke_agent`,
 `select_agent`, `answer_issue`, and `run_once`. `Runner.run_sync` remains confined
@@ -57,15 +63,15 @@ to `invoke_agent`.
 
 ## CLI
 
-Automatic routing is the default:
+The original one-shot route is the default:
 
 ```bash
 python support_agent_router.py "Customer message with one or more issues"
 ```
 
-If the positional message is omitted, the CLI enters an interactive loop. Manual
-routing uses `--manual`; pressing Enter accepts the recommended specialist, while
-entering an allowed specialist name overrides it.
+If the positional message is omitted, the CLI enters the extended interactive
+loop. `--manual` or `--give-reply` also selects the extended workflow. Manual
+routing accepts the recommended specialist or an allowed override.
 
 Prepare a customer reply automatically:
 
@@ -88,29 +94,12 @@ python support_agent_router.py \
 authentication is configured. The CLI then offers to save the prepared reply.
 `--save-draft PATH` provides the same fallback non-interactively.
 
-`--api-key` configures a key for the current process only with tracing disabled.
-The flag exists for the exercise, but `OPENAI_API_KEY` is recommended because
-shell history and operating-system process listings can expose command-line
-arguments.
-
 ## Data handling
 
 Customer facts are accepted only when the triage output quotes evidence from the
 original message. Logs contain operational identifiers and routing metadata, not
 the customer message, specialist answer, or reply body. Local logs and saved
 drafts use owner-only file permissions.
-
-Customer content is capped at 10,000 characters, key-like values are redacted
-before the first model call, and every agent receives the remaining text inside
-an `untrusted_customer_content` data envelope. Agent instructions explicitly
-reject role changes, prompt disclosure, credential requests, tool requests, and
-review bypasses found inside that data. Model output is schema-validated and
-sanitised before formatting.
-
-The browser terminal can keep a key in an isolated Web Worker for the current
-tab and discard the complete worker on request. It never places the key in
-React state, command history, local storage, output, or downloads. Local
-`OPENAI_API_KEY` remains safer than entering a secret into any public page.
 
 ## Output
 
@@ -120,11 +109,11 @@ The internal routing output remains plain text:
 Issues found: 2
 Issue 1: Intermittent 503 responses
 Selected agent: APIErrorAgent
-Agent flow: TriageAgent -> APIErrorAgent
+Agent flow: MultiIssueTriageAgent -> APIErrorAgent
 Answer: ...
 Issue 2: Dissatisfaction with support
 Selected agent: FeedbackAgent
-Agent flow: TriageAgent -> FeedbackAgent
+Agent flow: MultiIssueTriageAgent -> FeedbackAgent
 Answer: ...
 ```
 

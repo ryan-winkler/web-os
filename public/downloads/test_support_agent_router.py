@@ -15,7 +15,10 @@ with patch.object(
     answer = router.answer_issue("Requests are slow.", selected, agents)
 
     assert selected == "LatencyAgent"
-    assert answer == "Check timeout settings."
+    assert answer == (
+        "Check timeout settings.\n"
+        "Recommended next action: Review the answer and follow up as needed."
+    )
     assert calls == ["TriageAgent", "LatencyAgent"]
 
 with patch.object(router, "invoke_agent", return_value="UnknownAgent"):
