@@ -25,6 +25,8 @@ The single SDK boundary uses `Runner.run_sync` locally and the async runner
 through Pyodide's supported stack-switching bridge in the browser.
 Running `python3 support_agent_router.py` opens browser-native customer
 prompts; press Tab to complete commands, filenames, apps, and reply modes.
+The final design audit keeps informational text at 11px or larger and gives
+terminal inputs and API-access controls a 44px minimum target.
 
 ## Local development
 
