@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DOOM on JS-DOS</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: #080808;
+        color: #f4f4f4;
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      main { width: min(100%, 680px); padding: 12px 20px 18px; text-align: center; }
+      header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 10px; }
+      h1 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+      header a, footer a { color: #a9c9ff; }
+      #DOOM > .dosbox-container { width: 640px; height: 400px; max-width: 100%; margin: auto; }
+      #DOOM > .dosbox-container > .dosbox-overlay {
+        background: #111 url("https://thedoggybrad.github.io/doom_on_js-dos/DOOM.png") center / cover;
+      }
+      #DOOM > .dosbox-container > .dosbox-overlay > .dosbox-start {
+        width: 10em;
+        margin: 0 auto;
+        padding: 8px;
+        border-radius: 8px;
+        background: rgba(14, 14, 14, .72);
+      }
+      footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; color: #929292; font-size: 11px; }
+    </style>
+    <script src="https://thedoggybrad.github.io/doom_on_js-dos/js-dos-api.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>DOOM on JS-DOS</h1>
+        <a href="/downloads/MANUAL.md" target="_blank" rel="noreferrer">Local manual ↗</a>
+      </header>
+      <div id="DOOM" class="dosbox-default"></div>
+      <footer>
+        <span>Embedded from thedoggybrad/doom_on_js-dos</span>
+        <a id="fullscreen" href="#">Fullscreen</a>
+      </footer>
+    </main>
+    <script>
+      const game = new Dosbox({
+        id: "DOOM",
+        onload(dosbox) {
+          game.run("https://thedoggybrad.github.io/doom_on_js-dos/DOOM-@evilution.zip", "./DOOM/DOOM.EXE");
+        }
+      });
+      document.getElementById("fullscreen").addEventListener("click", (event) => {
+        event.preventDefault();
+        game.requestFullScreen();
+      });
+    </script>
+  </body>
+</html>

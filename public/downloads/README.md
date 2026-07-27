@@ -58,6 +58,21 @@ separate mocked tests:
 python test_support_agent_router.py
 ```
 
+## Browser workstation
+
+The accompanying website runs these exact Python files in CPython compiled to
+WebAssembly with Pyodide. The first Python command loads the runtime and the
+OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
+`python test_support_agent_router.py`, and CLI help run in the browser. API
+requests still require `OPENAI_API_KEY` and are intentionally run locally
+rather than asking for a secret on a public website.
+
+The desktop also includes a local DOOM manual, Start menu, games, editor,
+calculator, Code Lab, image viewer, local media player, permission-gated camera,
+wallpaper controls, paint canvas, system monitor, and one ZIP download of the
+interview artifacts. None of these tools sends customer replies or uploads
+local files.
+
 ## Boundaries
 
 - Network: `invoke_agent()` is the only Agents SDK runner boundary.
@@ -87,4 +102,3 @@ Specialist context is restricted to official OpenAI learning material:
   arbitrary mention of “slow” does not silently override an explicit 429.
 - With fifteen more minutes: bounded retry/backoff for 429s, JSON Lines output,
   and per-model cost estimates from token counts.
-

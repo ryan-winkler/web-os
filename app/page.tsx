@@ -1,14 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import {
   FormEvent,
   PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
 } from "react";
 
-type AppId = "doom" | "flash" | "router" | "tools" | "files" | "terminal" | "about" | "work" | "notes" | "help";
+type AppId = "doom" | "games" | "utilities" | "flash" | "router" | "tools" | "files" | "terminal" | "about" | "work" | "notes" | "help";
 type RouteName =
   | "RateLimitAgent"
   | "LatencyAgent"
@@ -35,14 +37,24 @@ type RouteResult = {
   action: string;
 };
 
+type TrayPanel = "system" | "calendar" | null;
+type Wallpaper = "sunset" | "teal";
+type PythonRunResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+};
+
 const APPS: Record<AppId, { title: string; glyph: string; description: string }> = {
   doom: { title: "DOOM — js-dos", glyph: "D00M", description: "The classic desktop break, embedded from the requested js-dos build" },
+  games: { title: "Games", glyph: "GAME", description: "DOOM and two small local break games" },
+  utilities: { title: "Utilities", glyph: "UTIL", description: "Scratchpad, calculator, image viewer, and system monitor" },
   flash: { title: "Flash Files", glyph: "SWF", description: "Badger Badger Badger and third-party attributions" },
   router: { title: "Support Workbench", glyph: "AI", description: "Router, operational tools, console, and help" },
   tools: { title: "Support Tools", glyph: "SLA", description: "Timers, request IDs, backoff, and status codes" },
   files: { title: "Documentation", glyph: "DIR", description: "Source, tests, README, and design notes" },
   terminal: { title: "support_agent_router.py — CLI", glyph: ">_", description: "Browser-safe command-line mirror of the Python workflow" },
-  about: { title: "https://ryanw.eu", glyph: "WEB", description: "Profile, selected work, and field notes" },
+  about: { title: "About me", glyph: "RW", description: "Profile card, selected work, and field notes" },
   work: { title: "Selected Work", glyph: "LAB", description: "Current systems and public projects" },
   notes: { title: "PROCESS.md", glyph: "MD", description: "Decisions, boundaries, and interview notes" },
   help: { title: "Help & UX Review", glyph: "?", description: "Shortcuts, safeguards, and Nielsen review" },
@@ -74,6 +86,12 @@ const FILES = [
     description: "The bounded-context design and interview decisions.",
   },
   {
+    name: "MANUAL.md",
+    glyph: "MD",
+    href: "/downloads/MANUAL.md",
+    description: "Local copy of the DOOM on JS-DOS controls and launch instructions.",
+  },
+  {
     name: "README.md",
     glyph: "MD",
     href: "/downloads/README.md",
@@ -93,6 +111,8 @@ const STATUS_CODES = [
 
 const INITIAL_WINDOWS: Record<AppId, WindowState> = {
   doom: { open: true, minimized: false, maximized: false, x: 405, y: 58, width: 690, height: 565, z: 6 },
+  games: { open: false, minimized: false, maximized: false, x: 310, y: 84, width: 720, height: 590, z: 2 },
+  utilities: { open: false, minimized: false, maximized: false, x: 330, y: 88, width: 730, height: 600, z: 2 },
   flash: { open: false, minimized: false, maximized: false, x: 255, y: 96, width: 720, height: 570, z: 2 },
   router: { open: false, minimized: false, maximized: false, x: 120, y: 76, width: 760, height: 650, z: 2 },
   tools: { open: false, minimized: false, maximized: false, x: 410, y: 92, width: 690, height: 600, z: 2 },
@@ -106,7 +126,9 @@ const INITIAL_WINDOWS: Record<AppId, WindowState> = {
 
 const DEFAULT_ISSUE =
   "We are seeing intermittent 429s during traffic bursts and customers are waiting too long for a response.";
-const PUBLIC_APPS: AppId[] = ["doom", "flash", "router", "tools", "files", "terminal", "about", "help"];
+const PUBLIC_APPS: AppId[] = ["doom", "games", "utilities", "flash", "router", "tools", "files", "terminal", "about", "help"];
+const TASKBAR_PINNED: AppId[] = ["files", "games", "terminal", "router", "notes", "tools"];
+const DOWNLOAD_ARCHIVE = "/downloads/support-agent-router-interview.zip";
 
 function routeIssue(issue: string): RouteResult {
   const text = issue.toLowerCase();
@@ -196,6 +218,12 @@ export default function Desktop() {
   const [startOpen, setStartOpen] = useState(false);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
+  const [trayPanel, setTrayPanel] = useState<TrayPanel>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [wallpaper, setWallpaper] = useState<Wallpaper>("sunset");
+  const [desktopRevealed, setDesktopRevealed] = useState(false);
+  const [desktopLayoutVersion, setDesktopLayoutVersion] = useState(0);
+  const [online, setOnline] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
   const [toast, setToast] = useState("Ryan's support workstation is ready.");
   const [routedCount, setRoutedCount] = useState(0);
@@ -212,10 +240,16 @@ export default function Desktop() {
     }, 0);
     const clock = window.setInterval(() => setNow(new Date()), 1000);
     const session = window.setInterval(() => setSessionSeconds((value) => value + 1), 1000);
+    const updateConnection = () => setOnline(window.navigator.onLine);
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
     return () => {
       window.clearTimeout(hydrate);
       window.clearInterval(clock);
       window.clearInterval(session);
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
     };
   }, []);
 
@@ -224,11 +258,29 @@ export default function Desktop() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setLauncherOpen(true);
+        setStartOpen(false);
+        setTrayPanel(null);
         window.setTimeout(() => launcherRef.current?.focus(), 20);
+      }
+      if (event.shiftKey && event.key === "Escape") {
+        event.preventDefault();
+        setStartOpen((current) => !current);
+        setLauncherOpen(false);
+        setTrayPanel(null);
+      }
+      if (event.shiftKey && event.key === "F10") {
+        event.preventDefault();
+        zRef.current += 1;
+        setWindows((current) => ({
+          ...current,
+          terminal: { ...current.terminal, open: true, minimized: false, z: zRef.current },
+        }));
       }
       if (event.key === "Escape") {
         setStartOpen(false);
         setLauncherOpen(false);
+        setTrayPanel(null);
+        setContextMenu(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -247,6 +299,9 @@ export default function Desktop() {
     focusApp(id);
     setStartOpen(false);
     setLauncherOpen(false);
+    setTrayPanel(null);
+    setContextMenu(null);
+    setDesktopRevealed(false);
     setToast(`${APPS[id].title} opened.`);
   };
 
@@ -290,6 +345,38 @@ export default function Desktop() {
   const filteredApps = PUBLIC_APPS.filter((id) =>
     `${APPS[id].title} ${APPS[id].description}`.toLowerCase().includes(launcherQuery.toLowerCase()),
   );
+  const focusedApp = (Object.keys(APPS) as AppId[])
+    .filter((id) => windows[id].open && !windows[id].minimized)
+    .sort((a, b) => windows[b].z - windows[a].z)[0];
+  const taskbarApps = [
+    ...TASKBAR_PINNED,
+    ...(Object.keys(APPS) as AppId[]).filter(
+      (id) => windows[id].open && !TASKBAR_PINNED.includes(id),
+    ),
+  ];
+
+  const resetDesktop = () => {
+    zRef.current = 6;
+    setWindows(INITIAL_WINDOWS);
+    setDesktopLayoutVersion((current) => current + 1);
+    setDesktopRevealed(false);
+    setContextMenu(null);
+    setToast("Desktop layout reset.");
+  };
+
+  const toggleDesktop = () => {
+    const shouldReveal = !desktopRevealed;
+    setWindows((current) =>
+      Object.fromEntries(
+        (Object.keys(current) as AppId[]).map((id) => [
+          id,
+          current[id].open ? { ...current[id], minimized: shouldReveal } : current[id],
+        ]),
+      ) as Record<AppId, WindowState>,
+    );
+    setDesktopRevealed(shouldReveal);
+    setToast(shouldReveal ? "Desktop revealed." : "Open windows restored.");
+  };
 
   return (
     <main className="desktop-shell">
@@ -297,33 +384,85 @@ export default function Desktop() {
         Skip to desktop
       </a>
 
-      <section id="desktop" className="desktop" aria-label="Ryan Winkler support engineering desktop">
+      <section
+        id="desktop"
+        className={`desktop wallpaper-${wallpaper}`}
+        aria-label="Ryan Winkler support engineering desktop"
+        onContextMenu={(event) => {
+          if ((event.target as HTMLElement).closest(".app-window")) return;
+          event.preventDefault();
+          setContextMenu({
+            x: Math.min(event.clientX, window.innerWidth - 220),
+            y: Math.min(event.clientY, window.innerHeight - 260),
+          });
+          setStartOpen(false);
+          setLauncherOpen(false);
+          setTrayPanel(null);
+        }}
+        onPointerDown={(event) => {
+          if (!(event.target as HTMLElement).closest(".desktop-context-menu")) setContextMenu(null);
+        }}
+      >
         <div className="wallpaper-orb wallpaper-orb-one" aria-hidden="true" />
         <div className="wallpaper-orb wallpaper-orb-two" aria-hidden="true" />
 
-        <nav className="desktop-icons" aria-label="Desktop files and folders">
+        <nav key={desktopLayoutVersion} className="desktop-icons" aria-label="Desktop files and folders">
           {FILES.filter((file) => file.name.endsWith(".py") || file.name === "README.md").map((file) => (
-            <a className="desktop-icon" href={file.href} download key={file.name}>
-              <DesktopArtifact kind="file" glyph={file.glyph} />
-              <span>{file.name}</span>
-            </a>
+            <MovableDesktopItem key={file.name}>
+              <a className="desktop-icon" href={file.href} download>
+                <DesktopArtifact kind="file" glyph={file.glyph} />
+                <span>{file.name}</span>
+              </a>
+            </MovableDesktopItem>
           ))}
-          <button className="desktop-icon" onClick={() => openApp("about")}>
-            <DesktopArtifact kind="folder" glyph="WEB" />
-            <span>https://ryanw.eu</span>
-          </button>
-          <button className="desktop-icon" onClick={() => openApp("router")}>
-            <DesktopArtifact kind="folder" glyph="SLA" />
-            <span>Support Workbench</span>
-          </button>
-          <button className="desktop-icon" onClick={() => openApp("files")}>
-            <DesktopArtifact kind="folder" glyph="DOC" />
-            <span>Documentation</span>
-          </button>
-          <button className="desktop-icon" onClick={() => openApp("flash")}>
-            <DesktopArtifact kind="folder" glyph="SWF" />
-            <span>Flash Files</span>
-          </button>
+          <MovableDesktopItem>
+            <a className="desktop-icon" href={DOWNLOAD_ARCHIVE} download>
+              <DesktopArtifact kind="file" glyph="ZIP" />
+              <span>interview-files.zip</span>
+            </a>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("about")}>
+              <DesktopArtifact kind="folder" glyph="RW" />
+              <span>About me</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <a className="desktop-icon" href="https://ryanw.eu/" target="_blank" rel="noreferrer">
+              <DesktopArtifact kind="file" glyph="HTML" />
+              <span>https://ryanw.eu</span>
+            </a>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("router")}>
+              <DesktopArtifact kind="folder" glyph="SLA" />
+              <span>Support Workbench</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("files")}>
+              <DesktopArtifact kind="folder" glyph="DOC" />
+              <span>Documentation</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("flash")}>
+              <DesktopArtifact kind="folder" glyph="SWF" />
+              <span>Flash Files</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("games")}>
+              <DesktopArtifact kind="folder" glyph="GAME" />
+              <span>Games</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("utilities")}>
+              <DesktopArtifact kind="folder" glyph="UTIL" />
+              <span>Utilities</span>
+            </button>
+          </MovableDesktopItem>
         </nav>
 
         <aside className="desktop-status" aria-label="Session counters">
@@ -365,6 +504,8 @@ export default function Desktop() {
               onMaximize={() => patchWindow(id, { maximized: !state.maximized })}
             >
               {id === "doom" && <DoomApp />}
+              {id === "games" && <GamesApp openApp={openApp} />}
+              {id === "utilities" && <UtilitiesApp wallpaper={wallpaper} setWallpaper={setWallpaper} />}
               {id === "flash" && <FlashFolderApp />}
               {id === "router" && (
                 <SupportFolderApp
@@ -384,6 +525,38 @@ export default function Desktop() {
             </AppWindow>
           );
         })}
+
+        {contextMenu && (
+          <nav
+            className="desktop-context-menu glass-panel"
+            aria-label="Desktop actions"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button onClick={() => openApp("router")}>
+              <TaskbarIcon id="router" />
+              <span><strong>Open Support Workbench</strong><small>Route and reply to an issue</small></span>
+            </button>
+            <button onClick={() => openApp("terminal")}>
+              <TaskbarIcon id="terminal" />
+              <span><strong>Open Terminal</strong><small>Run the local CLI mirror</small></span>
+            </button>
+            <button
+              onClick={() => {
+                setWallpaper((current) => current === "sunset" ? "teal" : "sunset");
+                setContextMenu(null);
+                setToast("Wallpaper changed.");
+              }}
+            >
+              <span className="context-swatch" aria-hidden="true" />
+              <span><strong>Change wallpaper</strong><small>Switch sunset and teal</small></span>
+            </button>
+            <button onClick={resetDesktop}>
+              <span className="context-reset" aria-hidden="true">↺</span>
+              <span><strong>Reset desktop layout</strong><small>Restore the interview opening</small></span>
+            </button>
+          </nav>
+        )}
       </section>
 
       {startOpen && (
@@ -403,11 +576,26 @@ export default function Desktop() {
               </button>
             ))}
           </div>
+          <section className="start-recents" aria-label="Recent interview files">
+            <header>
+              <strong>Interview files</strong>
+              <span>
+                <a href={DOWNLOAD_ARCHIVE} download>Download all</a>
+                <button onClick={() => openApp("files")}>Open folder</button>
+              </span>
+            </header>
+            <div>
+              {FILES.slice(0, 3).map((file) => (
+                <a href={file.href} download key={file.name}>
+                  <DesktopArtifact kind="file" glyph={file.glyph} />
+                  <span><strong>{file.name}</strong><small>{file.description}</small></span>
+                </a>
+              ))}
+            </div>
+          </section>
           <div className="start-footer">
             <span>Local demo · no customer messages sent</span>
-            <a href="https://github.com/ryan-winkler" target="_blank" rel="noreferrer">
-              GitHub ↗
-            </a>
+            <button onClick={resetDesktop}>Reset layout</button>
           </div>
         </section>
       )}
@@ -440,51 +628,130 @@ export default function Desktop() {
       <footer className="taskbar glass-panel">
         <button
           className={`start-button ${startOpen ? "active" : ""}`}
+          aria-label="Open Start menu"
           aria-expanded={startOpen}
           onClick={() => {
             setStartOpen((current) => !current);
             setLauncherOpen(false);
+            setTrayPanel(null);
           }}
         >
-          <span>RW</span>
-          <span className="taskbar-label">Start</span>
+          <span className="launcher-grid-icon" aria-hidden="true">
+            {Array.from({ length: 9 }, (_, index) => <i key={index} />)}
+          </span>
+          <span className="taskbar-tooltip">Start <kbd>Shift Esc</kbd></span>
         </button>
+        <span className="taskbar-divider" aria-hidden="true" />
         <button
           className="search-button"
+          aria-label="Find an app"
           onClick={() => {
             setLauncherOpen(true);
             setStartOpen(false);
+            setTrayPanel(null);
             window.setTimeout(() => launcherRef.current?.focus(), 20);
           }}
         >
-          <span>⌕</span>
-          <span className="taskbar-label">Find an app</span>
-          <kbd>Ctrl K</kbd>
+          <span className="search-icon" aria-hidden="true" />
+          <span className="taskbar-tooltip">Find an app <kbd>Ctrl K</kbd></span>
         </button>
         <div className="taskbar-apps" aria-label="Open applications">
-          {(Object.keys(APPS) as AppId[])
-            .filter((id) => windows[id].open)
-            .map((id) => (
+          {taskbarApps.map((id) => (
               <button
                 key={id}
-                className={!windows[id].minimized ? "active" : ""}
-                aria-label={`${windows[id].minimized ? "Restore" : "Focus"} ${APPS[id].title}`}
-                onClick={() =>
-                  windows[id].minimized
-                    ? focusApp(id)
-                    : patchWindow(id, { minimized: true })
+                className={[
+                  windows[id].open ? "open" : "",
+                  focusedApp === id ? "active" : "",
+                ].filter(Boolean).join(" ")}
+                aria-label={
+                  !windows[id].open
+                    ? `Open ${APPS[id].title}`
+                    : windows[id].minimized
+                      ? `Restore ${APPS[id].title}`
+                      : focusedApp === id
+                        ? `Minimise ${APPS[id].title}`
+                        : `Focus ${APPS[id].title}`
                 }
+                onClick={() => {
+                  if (!windows[id].open || windows[id].minimized || focusedApp !== id) focusApp(id);
+                  else patchWindow(id, { minimized: true });
+                }}
               >
-                <AppGlyph glyph={APPS[id].glyph} small />
-                <span className="taskbar-label">{APPS[id].title}</span>
+                <TaskbarIcon id={id} />
+                <span className="taskbar-tooltip">
+                  <strong>{APPS[id].title}</strong>
+                  <small>{windows[id].open ? windows[id].minimized ? "Minimised" : focusedApp === id ? "In focus" : "Open" : "Pinned"}</small>
+                </span>
               </button>
             ))}
         </div>
-        <div className="taskbar-clock" aria-label={now?.toLocaleString("en-IE") ?? "Loading time"}>
-          <strong>{now?.toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</strong>
-          <span>{now?.toLocaleDateString("en-IE", { day: "2-digit", month: "short" }) ?? "—"}</span>
+        <div className="taskbar-system">
+          <button
+            className={trayPanel === "system" ? "active" : ""}
+            aria-label="Open workstation status"
+            aria-expanded={trayPanel === "system"}
+            onClick={() => {
+              setTrayPanel((current) => current === "system" ? null : "system");
+              setStartOpen(false);
+              setLauncherOpen(false);
+            }}
+          >
+            <span className="network-icon" aria-hidden="true"><i /><i /><i /></span>
+            <span className="speaker-icon" aria-hidden="true">◖</span>
+            <span className="battery-icon" aria-hidden="true"><i /></span>
+            <span className="taskbar-tooltip">Workstation status</span>
+          </button>
+          <button
+            className={`taskbar-clock ${trayPanel === "calendar" ? "active" : ""}`}
+            aria-label={now?.toLocaleString("en-IE") ?? "Loading time"}
+            aria-expanded={trayPanel === "calendar"}
+            onClick={() => {
+              setTrayPanel((current) => current === "calendar" ? null : "calendar");
+              setStartOpen(false);
+              setLauncherOpen(false);
+            }}
+          >
+            <strong>{now?.toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</strong>
+            <span>{now?.toLocaleDateString("en-IE", { day: "2-digit", month: "short" }) ?? "—"}</span>
+          </button>
+          <button className="show-desktop-button" onClick={toggleDesktop} aria-label={desktopRevealed ? "Restore open windows" : "Show desktop"}>
+            <span className="taskbar-tooltip">{desktopRevealed ? "Restore windows" : "Show desktop"}</span>
+          </button>
         </div>
       </footer>
+
+      {trayPanel === "system" && (
+        <section className="tray-panel system-panel glass-panel" aria-label="Workstation status">
+          <header>
+            <span>Workstation status</span>
+            <strong>Review-safe</strong>
+          </header>
+          <dl>
+            <div><dt><span className={`status-dot ${online ? "online" : "offline"}`} />Connection</dt><dd>{online ? "Online" : "Offline"}</dd></div>
+            <div><dt><span className="status-dot local" />Customer data</dt><dd>Local only</dd></div>
+            <div><dt><span className="status-dot review" />Reply delivery</dt><dd>Human review</dd></div>
+          </dl>
+          <div className="tray-actions">
+            <button onClick={() => openApp("router")}>Open Workbench</button>
+            <button onClick={resetDesktop}>Reset layout</button>
+          </div>
+        </section>
+      )}
+
+      {trayPanel === "calendar" && (
+        <section className="tray-panel calendar-panel glass-panel" aria-label="Calendar and session status">
+          <time dateTime={now?.toISOString()}>
+            <strong>{now?.toLocaleDateString("en-IE", { weekday: "long" }) ?? "Today"}</strong>
+            <span>{now?.toLocaleDateString("en-IE", { day: "numeric", month: "long", year: "numeric" }) ?? "Loading date"}</span>
+          </time>
+          <div className="calendar-day">{now?.getDate() ?? "—"}</div>
+          <dl>
+            <div><dt>Session</dt><dd>{formatDuration(sessionSeconds)}</dd></div>
+            <div><dt>Issues routed</dt><dd>{routedCount}</dd></div>
+            <div><dt>Drafts saved</dt><dd>{draftCount}</dd></div>
+          </dl>
+        </section>
+      )}
 
       <div className="toast" role="status" aria-live="polite">
         {toast}
@@ -497,11 +764,61 @@ function AppGlyph({ glyph, small = false, tone = "app" }: { glyph: string; small
   return <span className={`app-glyph ${small ? "small" : ""} ${tone}`}>{glyph}</span>;
 }
 
+function TaskbarIcon({ id }: { id: AppId }) {
+  if (id === "files") return <span className="taskbar-icon taskbar-folder-icon" aria-hidden="true" />;
+  if (id === "router") return <span className="taskbar-icon taskbar-router-icon" aria-hidden="true"><i /><i /></span>;
+  if (id === "notes") return <span className="taskbar-icon taskbar-document-icon" aria-hidden="true"><i /><i /><i /></span>;
+  if (id === "tools") return <span className="taskbar-icon taskbar-tools-icon" aria-hidden="true">✦</span>;
+  if (id === "terminal") return <span className="taskbar-icon taskbar-terminal-icon" aria-hidden="true">&gt;_</span>;
+  if (id === "games") return <span className="taskbar-icon taskbar-games-icon" aria-hidden="true">＋</span>;
+  return <span className="taskbar-icon taskbar-letter-icon" aria-hidden="true">{APPS[id].glyph.slice(0, 2)}</span>;
+}
+
 function DesktopArtifact({ kind, glyph }: { kind: "file" | "folder"; glyph: string }) {
   return (
     <span className={`desktop-artifact ${kind}`} aria-hidden="true">
       <span>{glyph}</span>
     </span>
+  );
+}
+
+function MovableDesktopItem({ children }: { children: ReactNode }) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragged = useRef(false);
+
+  const beginMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || window.innerWidth < 760) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const origin = { pointerX: event.clientX, pointerY: event.clientY, ...offset };
+    const onMove = (moveEvent: PointerEvent) => {
+      const x = origin.x + moveEvent.clientX - origin.pointerX;
+      const y = origin.y + moveEvent.clientY - origin.pointerY;
+      if (Math.abs(x - origin.x) + Math.abs(y - origin.y) > 5) dragged.current = true;
+      setOffset({ x, y });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  return (
+    <div
+      className="desktop-icon-slot"
+      style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+      onPointerDown={beginMove}
+      onDragStart={(event) => event.preventDefault()}
+      onClickCapture={(event) => {
+        if (!dragged.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragged.current = false;
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -852,6 +1169,13 @@ function FilesApp({ notify }: { notify: (message: string) => void }) {
         <button onClick={() => window.open("https://ryanw.eu/", "_blank")}>ryanw.eu ↗</button>
       </aside>
       <div className="file-main">
+        <header className="file-main-toolbar">
+          <span>
+            <strong>Interview files</strong>
+            <small>Exact source, tests, manual, and decision notes</small>
+          </span>
+          <a className="primary-button" href={DOWNLOAD_ARCHIVE} download>Download all (.zip)</a>
+        </header>
         <div className="file-list">
           {FILES.map((file) => (
             <button className={activeFile?.name === file.name ? "active" : ""} key={file.name} onClick={() => previewFile(file)}>
@@ -882,74 +1206,806 @@ function FilesApp({ notify }: { notify: (message: string) => void }) {
 
 function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
   const welcome = [
-    "Ryan Support Workstation — CLI demonstration",
-    '$ python3 support_agent_router.py --give-reply prepared "We receive 429 errors during traffic bursts."',
-    "Selected agent: RateLimitAgent",
-    "Agent flow: TriageAgent → RateLimitAgent → ReplyAgent → Human review",
-    "Prepared reply: Thanks for flagging this. Please share a request ID and timestamp while bounded backoff and lower burst concurrency are applied.",
-    "Delivery: draft prepared; no customer message sent.",
+    "Ryan Support Workstation — real browser Python terminal",
+    "The first Python command loads CPython and the shipped dependencies.",
+    "Try: python3 support_agent_router.py --help",
+    "Try: python test_pure.py",
+    "Agents SDK calls use the real script and require OPENAI_API_KEY when run locally.",
+    "No key is requested or stored by this public website.",
     "",
-    'Type "help" for safe browser commands.',
+    'Type "help" for commands.',
   ];
   const [lines, setLines] = useState(welcome);
   const [command, setCommand] = useState("");
+  const [running, setRunning] = useState(false);
+  const [runtimeStatus, setRuntimeStatus] = useState("Python runtime loads on demand");
+  const workerRef = useRef<Worker | null>(null);
+  const pendingRef = useRef<((result: PythonRunResult) => void) | null>(null);
 
-  const run = (event: FormEvent) => {
-    event.preventDefault();
-    const input = command.trim();
-    if (!input) return;
+  useEffect(() => () => workerRef.current?.terminate(), []);
+
+  const runPython = (input: string) =>
+    new Promise<PythonRunResult>((resolve) => {
+      let worker = workerRef.current;
+      if (!worker) {
+        worker = new Worker("/python-worker.mjs", { type: "module" });
+        workerRef.current = worker;
+        worker.onmessage = ({ data }: MessageEvent<{ type: string; message?: string } & PythonRunResult>) => {
+          if (data.type === "progress") {
+            setRuntimeStatus(data.message ?? "Working…");
+            return;
+          }
+          pendingRef.current?.(data);
+          pendingRef.current = null;
+        };
+        worker.onerror = () => {
+          pendingRef.current?.({
+            stdout: "",
+            stderr: "The browser Python runtime could not start. Download the ZIP and run the command locally.",
+            exitCode: 1,
+          });
+          pendingRef.current = null;
+          workerRef.current?.terminate();
+          workerRef.current = null;
+        };
+      }
+      pendingRef.current = resolve;
+      worker.postMessage({ command: input });
+    });
+
+  const execute = async (rawInput: string) => {
+    const input = rawInput.trim();
+    if (!input || running) return;
+    setCommand("");
+    setLines((current) => [...current, `rw@support:~$ ${input}`]);
     const [name, ...args] = input.split(/\s+/);
     let output: string[] = [];
-    if (name === "help") output = ["help · ls · whoami · status · route <issue> · open router|tools|files|about · clear"];
-    else if (name === "ls") output = FILES.map((file) => file.name);
-    else if (name === "whoami") output = ["Ryan Winkler — Senior Product Manager, Dublin"];
-    else if (name === "status") output = ["Local demo healthy · sending disabled · human review required"];
+    if (name === "python" || name === "python3") {
+      setRunning(true);
+      setRuntimeStatus("Starting Python…");
+      const result = await runPython(input);
+      output = [
+        ...result.stdout.replace(/\s+$/, "").split("\n").filter(Boolean),
+        ...result.stderr.replace(/\s+$/, "").split("\n").filter(Boolean),
+        `[exit ${result.exitCode}]`,
+      ];
+      if (/OPENAI_API_KEY|api key/i.test(result.stderr)) {
+        output.push("Public-site boundary: no API key is stored here. Download the ZIP to run Agents SDK calls locally.");
+      }
+      setRunning(false);
+    } else if (name === "help") {
+      output = [
+        "python3 support_agent_router.py --help",
+        "python test_pure.py",
+        "python test_support_agent_router.py",
+        "help · ls · cat <file> · whoami · status · route <issue> · open <app> · clear",
+      ];
+    } else if (name === "ls") output = [...FILES.map((file) => file.name), "support-agent-router-interview.zip"];
+    else if (name === "whoami") output = ["Ryan Winkler — AI Support Engineer (hopefully), Dublin"];
+    else if (name === "status") output = [`${runtimeStatus} · sending disabled · human review required`];
     else if (name === "route") {
       const issue = args.join(" ");
       output = issue ? [`${routeIssue(issue).route}: ${routeIssue(issue).action}`] : ["usage: route <customer issue>"];
+    } else if (name === "cat") {
+      const file = FILES.find(({ name: filename }) => filename === args[0]);
+      if (!file) output = ["Choose a text file shown by ls."];
+      else {
+        try {
+          const response = await fetch(file.href);
+          if (!response.ok) throw new Error();
+          output = (await response.text()).split("\n");
+        } catch {
+          output = [`Could not read ${file.name}.`];
+        }
+      }
     } else if (name === "open") {
       const target = args[0] as AppId;
       if (target in APPS) {
         openApp(target);
         output = [`Opened ${APPS[target].title}`];
-      } else output = ["Unknown app. Try: router, tools, files, about"];
+      } else output = ["Unknown app. Try: router, tools, files, games, doom, flash, about"];
     } else if (name === "clear") {
       setLines([]);
-      setCommand("");
       return;
     } else output = [`Command not found: ${name}. Type "help".`];
-    setLines((current) => [...current, `rw@support:~$ ${input}`, ...output]);
-    setCommand("");
+    setLines((current) => [...current, ...output]);
+  };
+
+  const run = (event: FormEvent) => {
+    event.preventDefault();
+    void execute(command);
   };
 
   return (
     <div className="terminal-app" onClick={(event) => (event.currentTarget.querySelector("input") as HTMLInputElement)?.focus()}>
+      <header className="terminal-toolbar">
+        <span className={running ? "working" : ""}>{runtimeStatus}</span>
+        <div>
+          <button onClick={() => void execute("python3 support_agent_router.py --help")} disabled={running}>CLI help</button>
+          <button onClick={() => void execute("python test_pure.py")} disabled={running}>Pure tests</button>
+          <button onClick={() => void execute("python test_support_agent_router.py")} disabled={running}>SDK tests</button>
+        </div>
+      </header>
       <div className="terminal-output" aria-live="polite">
         {lines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}
       </div>
       <form onSubmit={run}>
         <label htmlFor="terminal-command">rw@support:~$</label>
-        <input id="terminal-command" value={command} onChange={(event) => setCommand(event.target.value)} autoComplete="off" />
+        <input
+          id="terminal-command"
+          value={command}
+          onChange={(event) => setCommand(event.target.value)}
+          autoComplete="off"
+          disabled={running}
+          aria-label="Terminal command"
+        />
       </form>
     </div>
   );
 }
 
 function DoomApp() {
+  const [view, setView] = useState<"game" | "manual">("game");
+  if (view === "manual") {
+    return (
+      <div className="doom-manual">
+        <nav className="folder-toolbar" aria-label="DOOM manual navigation">
+          <button onClick={() => setView("game")}>← Back to game</button>
+          <span>/ MANUAL.md</span>
+          <a className="folder-download" href="/downloads/MANUAL.md" download>Download</a>
+        </nav>
+        <article className="markdown-app">
+          <h1>DOOM on JS-DOS User Manual</h1>
+          <p className="markdown-meta">Local copy of the upstream MANUAL.md</p>
+          <h2>Start the game</h2>
+          <ol>
+            <li>Select <strong>Click to start</strong> and wait for the game to load.</li>
+            <li>Press any movement key after loading.</li>
+            <li>Use the movement keys to navigate the game menu.</li>
+            <li>Enjoy.</li>
+          </ol>
+          <h2>Game controls</h2>
+          <dl className="manual-controls">
+            <div><dt>Move</dt><dd>Up, Down, Left, Right</dd></div>
+            <div><dt>Use</dt><dd>W</dd></div>
+            <div><dt>Fire</dt><dd>S</dd></div>
+            <div><dt>Speed</dt><dd>Space</dd></div>
+            <div><dt>Strafe mode</dt><dd>Alt</dd></div>
+            <div><dt>Strafe</dt><dd>A, D</dd></div>
+            <div><dt>Change weapon</dt><dd>1, 2, 3, 4, 5, 6, 7</dd></div>
+          </dl>
+          <p>
+            Source: <a href="https://github.com/thedoggybrad/doom_on_js-dos/blob/main/MANUAL.MD" target="_blank" rel="noreferrer">
+              thedoggybrad/doom_on_js-dos MANUAL.md ↗
+            </a>
+          </p>
+        </article>
+      </div>
+    );
+  }
   return (
     <div className="doom-app">
       <iframe
-        src="https://thedoggybrad.github.io/doom_on_js-dos/"
+        src="/doom/index.html"
         title="DOOM running in js-dos"
         allow="autoplay; fullscreen; gamepad"
-        sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
+        sandbox="allow-scripts allow-pointer-lock allow-popups allow-downloads"
       />
       <aside>
         <span>Desktop only · click the game panel to start</span>
-        <a href="https://github.com/thedoggybrad/doom_on_js-dos" target="_blank" rel="noreferrer">
-          Source and manual ↗
-        </a>
+        <button onClick={() => setView("manual")}>Open local manual</button>
       </aside>
+    </div>
+  );
+}
+
+const WINNING_LINES = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6],
+] as const;
+
+function gameWinner(board: string[]) {
+  for (const [a, b, c] of WINNING_LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+  }
+  return board.every(Boolean) ? "Draw" : "";
+}
+
+function GamesApp({ openApp }: { openApp: (id: AppId) => void }) {
+  const [view, setView] = useState<"folder" | "noughts" | "memory">("folder");
+  if (view === "noughts") return <NoughtsAndCrosses onBack={() => setView("folder")} />;
+  if (view === "memory") return <IncidentMemory onBack={() => setView("folder")} />;
+  return (
+    <div className="website-folder">
+      <header className="folder-toolbar">
+        <button disabled>←</button>
+        <button disabled>→</button>
+        <button disabled>↑</button>
+        <span className="folder-path">Desktop / Games</span>
+      </header>
+      <div className="folder-banner games-folder-banner">
+        <span className="profile-mark">GAME</span>
+        <div>
+          <span className="app-eyebrow">Short breaks, clean resets</span>
+          <h2>Three ways to step away.</h2>
+          <p>One preserved classic and two original local games.</p>
+        </div>
+      </div>
+      <div className="folder-grid games-grid">
+        <button onClick={() => openApp("doom")}>
+          <AppGlyph glyph="D00M" />
+          <span><strong>DOOM</strong><small>Open the requested js-dos build</small></span>
+        </button>
+        <button onClick={() => setView("noughts")}>
+          <AppGlyph glyph="X/O" />
+          <span><strong>Noughts & Crosses</strong><small>Two-player local board</small></span>
+        </button>
+        <button onClick={() => setView("memory")}>
+          <AppGlyph glyph="PAIR" />
+          <span><strong>Incident Memory</strong><small>Match support signals</small></span>
+        </button>
+      </div>
+      <footer className="folder-status">3 games · Local games keep no scores or personal data</footer>
+    </div>
+  );
+}
+
+function calculateExpression(input: string) {
+  const match = input.trim().match(/^(-?\d+(?:\.\d+)?)\s*([+\-*/])\s*(-?\d+(?:\.\d+)?)$/);
+  if (!match) return "Use two numbers and +, -, *, or /.";
+  const left = Number(match[1]);
+  const right = Number(match[3]);
+  if (match[2] === "/" && right === 0) return "Cannot divide by zero.";
+  const result = match[2] === "+"
+    ? left + right
+    : match[2] === "-"
+      ? left - right
+      : match[2] === "*"
+        ? left * right
+        : left / right;
+  return Number.isFinite(result) ? String(Number(result.toFixed(8))) : "Result is outside the supported range.";
+}
+
+function UtilitiesApp({ wallpaper, setWallpaper }: { wallpaper: Wallpaper; setWallpaper: (wallpaper: Wallpaper) => void }) {
+  const [view, setView] = useState<
+    "folder" | "scratchpad" | "calculator" | "images" | "system" | "code" | "browser" | "media" | "camera" | "wallpaper" | "paint"
+  >("folder");
+  if (view === "scratchpad") return <Scratchpad onBack={() => setView("folder")} />;
+  if (view === "calculator") return <Calculator onBack={() => setView("folder")} />;
+  if (view === "images") return <ImageViewer onBack={() => setView("folder")} />;
+  if (view === "system") return <SystemMonitor onBack={() => setView("folder")} />;
+  if (view === "code") return <CodeLab onBack={() => setView("folder")} />;
+  if (view === "browser") return <LinkBrowser onBack={() => setView("folder")} />;
+  if (view === "media") return <MediaDeck onBack={() => setView("folder")} />;
+  if (view === "camera") return <CameraApp onBack={() => setView("folder")} />;
+  if (view === "wallpaper") return <WallpaperStudio onBack={() => setView("folder")} wallpaper={wallpaper} setWallpaper={setWallpaper} />;
+  if (view === "paint") return <PaintApp onBack={() => setView("folder")} />;
+  return (
+    <div className="website-folder">
+      <header className="folder-toolbar">
+        <button disabled>←</button>
+        <button disabled>→</button>
+        <button disabled>↑</button>
+        <span className="folder-path">Desktop / Utilities</span>
+      </header>
+      <div className="folder-banner utilities-folder-banner">
+        <span className="profile-mark">UTIL</span>
+        <div>
+          <span className="app-eyebrow">Local workstation utilities</span>
+          <h2>Small tools that do real work.</h2>
+          <p>No accounts, uploads, tracking, or pretend integrations.</p>
+        </div>
+      </div>
+      <div className="folder-grid utilities-grid">
+        <button onClick={() => setView("scratchpad")}>
+          <AppGlyph glyph="TXT" />
+          <span><strong>Scratchpad</strong><small>Write, save locally, or download a note</small></span>
+        </button>
+        <button onClick={() => setView("calculator")}>
+          <AppGlyph glyph="1+1" />
+          <span><strong>Calculator</strong><small>Evaluate a simple arithmetic expression</small></span>
+        </button>
+        <button onClick={() => setView("images")}>
+          <AppGlyph glyph="IMG" />
+          <span><strong>Image Viewer</strong><small>Inspect the supplied wallpaper and profile card</small></span>
+        </button>
+        <button onClick={() => setView("system")}>
+          <AppGlyph glyph="SYS" />
+          <span><strong>System Monitor</strong><small>Inspect this browser session without collecting data</small></span>
+        </button>
+        <button onClick={() => setView("code")}>
+          <AppGlyph glyph="&lt;/&gt;" />
+          <span><strong>Code Lab</strong><small>Edit and run a sandboxed HTML page</small></span>
+        </button>
+        <button onClick={() => setView("browser")}>
+          <AppGlyph glyph="WEB" />
+          <span><strong>Web Links</strong><small>Open useful support and portfolio destinations</small></span>
+        </button>
+        <button onClick={() => setView("media")}>
+          <AppGlyph glyph="AV" />
+          <span><strong>Media Deck</strong><small>Play a local audio or video file</small></span>
+        </button>
+        <button onClick={() => setView("camera")}>
+          <AppGlyph glyph="CAM" />
+          <span><strong>Camera</strong><small>Preview and capture locally with permission</small></span>
+        </button>
+        <button onClick={() => setView("wallpaper")}>
+          <AppGlyph glyph="BG" />
+          <span><strong>Wallpaper Studio</strong><small>Switch between the supplied and alternate desktop</small></span>
+        </button>
+        <button onClick={() => setView("paint")}>
+          <AppGlyph glyph="ART" />
+          <span><strong>Paint</strong><small>Draw on a local canvas and download it</small></span>
+        </button>
+      </div>
+      <footer className="folder-status">10 utilities · Data stays in this browser</footer>
+    </div>
+  );
+}
+
+function UtilityShell({ title, onBack, children }: { title: string; onBack: () => void; children: ReactNode }) {
+  return (
+    <div className="utility-app">
+      <nav className="folder-toolbar"><button onClick={onBack}>← Utilities</button><span>/ {title}</span></nav>
+      {children}
+    </div>
+  );
+}
+
+function Scratchpad({ onBack }: { onBack: () => void }) {
+  const [text, setText] = useState("# Support scratchpad\n\nRequest ID:\nUTC timestamp:\nExpected:\nObserved:\n");
+  const [status, setStatus] = useState("Not saved");
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  return (
+    <UtilityShell title="Scratchpad.md" onBack={onBack}>
+      <div className="scratchpad-toolbar">
+        <span>{wordCount} words · {text.length} characters</span>
+        <div>
+          <button onClick={() => {
+            localStorage.setItem("rw-support-scratchpad", text);
+            setStatus("Saved in this browser");
+          }}>Save local</button>
+          <button onClick={() => {
+            const saved = localStorage.getItem("rw-support-scratchpad");
+            if (saved !== null) {
+              setText(saved);
+              setStatus("Loaded local note");
+            } else setStatus("No local note found");
+          }}>Load local</button>
+          <button onClick={() => downloadText("support-scratchpad.md", text)}>Download</button>
+        </div>
+      </div>
+      <textarea className="scratchpad-area" value={text} onChange={(event) => {
+        setText(event.target.value);
+        setStatus("Not saved");
+      }} aria-label="Support scratchpad" spellCheck />
+      <footer className="utility-status">{status}</footer>
+    </UtilityShell>
+  );
+}
+
+function Calculator({ onBack }: { onBack: () => void }) {
+  const [expression, setExpression] = useState("429 / 3");
+  const [result, setResult] = useState("143");
+  return (
+    <UtilityShell title="Calculator" onBack={onBack}>
+      <section className="calculator-app">
+        <span className="app-eyebrow">Simple arithmetic</span>
+        <label>
+          <span>Expression</span>
+          <input value={expression} onChange={(event) => setExpression(event.target.value)} onKeyDown={(event) => {
+            if (event.key === "Enter") setResult(calculateExpression(expression));
+          }} />
+        </label>
+        <output>{result}</output>
+        <button className="primary-button" onClick={() => setResult(calculateExpression(expression))}>Calculate</button>
+        <p>Supports two numbers and one operator: +, -, *, or /.</p>
+      </section>
+    </UtilityShell>
+  );
+}
+
+function ImageViewer({ onBack }: { onBack: () => void }) {
+  const images = [
+    { name: "Generated image 1.png", src: "/wallpaper.png", width: 1672, height: 941 },
+    { name: "codex-profile-card.png", src: "/ryan-profile-card.png", width: 998, height: 612 },
+  ];
+  const [selected, setSelected] = useState(0);
+  const image = images[selected];
+  return (
+    <UtilityShell title="Image Viewer" onBack={onBack}>
+      <div className="image-viewer-app">
+        <aside>
+          {images.map((item, index) => (
+            <button key={item.name} className={selected === index ? "active" : ""} onClick={() => setSelected(index)}>
+              <Image src={item.src} width={120} height={72} alt="" />
+              <span>{item.name}</span>
+            </button>
+          ))}
+        </aside>
+        <figure>
+          <Image src={image.src} width={image.width} height={image.height} alt={image.name} />
+          <figcaption>{image.name} · {image.width} × {image.height}</figcaption>
+        </figure>
+      </div>
+    </UtilityShell>
+  );
+}
+
+function SystemMonitor({ onBack }: { onBack: () => void }) {
+  const inspect = () => ({
+    connection: navigator.onLine ? "Online" : "Offline",
+    viewport: `${window.innerWidth} × ${window.innerHeight}`,
+    localItems: String(localStorage.length),
+    session: formatDuration(Math.floor(performance.now() / 1000)),
+  });
+  const [metrics, setMetrics] = useState({ connection: "Select refresh", viewport: "—", localItems: "—", session: "—" });
+  return (
+    <UtilityShell title="System Monitor" onBack={onBack}>
+      <section className="system-monitor">
+        <header>
+          <div><span className="app-eyebrow">Browser session only</span><h2>Workstation status</h2></div>
+          <button className="primary-button" onClick={() => setMetrics(inspect())}>Refresh</button>
+        </header>
+        <dl>
+          <div><dt>Connection</dt><dd>{metrics.connection}</dd></div>
+          <div><dt>Viewport</dt><dd>{metrics.viewport}</dd></div>
+          <div><dt>Local data items</dt><dd>{metrics.localItems}</dd></div>
+          <div><dt>Page uptime</dt><dd>{metrics.session}</dd></div>
+        </dl>
+        <p>No metrics leave the browser. Refresh reads only the current page and local storage count.</p>
+      </section>
+    </UtilityShell>
+  );
+}
+
+function CodeLab({ onBack }: { onBack: () => void }) {
+  const initial = `<main>
+  <h1>Support signal</h1>
+  <p>Turn evidence into the next useful action.</p>
+</main>
+<style>
+  body { margin: 0; padding: 2rem; background: #0b1422; color: #eef5ff; font: 16px system-ui; }
+  h1 { color: #8dbaff; }
+</style>`;
+  const [source, setSource] = useState(initial);
+  const [preview, setPreview] = useState(initial);
+  return (
+    <UtilityShell title="Code Lab" onBack={onBack}>
+      <div className="code-lab">
+        <div className="code-lab-toolbar">
+          <span>Sandboxed HTML preview</span>
+          <div>
+            <button onClick={() => { setSource(initial); setPreview(initial); }}>Reset</button>
+            <button className="primary-button" onClick={() => setPreview(source)}>Run</button>
+          </div>
+        </div>
+        <textarea value={source} onChange={(event) => setSource(event.target.value)} spellCheck={false} aria-label="HTML source" />
+        <iframe title="Code Lab preview" sandbox="allow-scripts" srcDoc={preview} />
+      </div>
+    </UtilityShell>
+  );
+}
+
+function LinkBrowser({ onBack }: { onBack: () => void }) {
+  const [address, setAddress] = useState("https://ryanw.eu/");
+  const [error, setError] = useState("");
+  const openAddress = () => {
+    try {
+      const url = new URL(address);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+      window.open(url.href, "_blank", "noopener,noreferrer");
+      setError("");
+    } catch {
+      setError("Enter a complete http:// or https:// address.");
+    }
+  };
+  const links = [
+    ["ryanw.eu", "https://ryanw.eu/"],
+    ["Ryan on GitHub", "https://github.com/ryan-winkler"],
+    ["OpenAI Developer Docs", "https://developers.openai.com/api/docs"],
+    ["OpenAI Cookbook", "https://developers.openai.com/cookbook"],
+    ["OpenAI Learn", "https://developers.openai.com/learn"],
+  ];
+  return (
+    <UtilityShell title="Web Links" onBack={onBack}>
+      <section className="link-browser">
+        <form onSubmit={(event) => { event.preventDefault(); openAddress(); }}>
+          <input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Web address" />
+          <button className="primary-button">Open ↗</button>
+        </form>
+        {error && <p className="utility-error">{error}</p>}
+        <div>
+          {links.map(([label, href]) => (
+            <button key={href} onClick={() => { setAddress(href); window.open(href, "_blank", "noopener,noreferrer"); }}>
+              <span>↗</span><strong>{label}</strong><small>{href}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+    </UtilityShell>
+  );
+}
+
+function MediaDeck({ onBack }: { onBack: () => void }) {
+  const [media, setMedia] = useState<{ url: string; kind: "audio" | "video"; name: string } | null>(null);
+  useEffect(() => () => {
+    if (media) URL.revokeObjectURL(media.url);
+  }, [media]);
+  return (
+    <UtilityShell title="Media Deck" onBack={onBack}>
+      <section className="media-deck">
+        <header>
+          <div><span className="app-eyebrow">Local playback</span><h2>{media?.name ?? "Choose a file"}</h2></div>
+          <label className="primary-button">
+            Open media
+            <input type="file" accept="audio/*,video/*" onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              if (media) URL.revokeObjectURL(media.url);
+              setMedia({ url: URL.createObjectURL(file), kind: file.type.startsWith("video/") ? "video" : "audio", name: file.name });
+            }} />
+          </label>
+        </header>
+        {media?.kind === "video" && <video src={media.url} controls />}
+        {media?.kind === "audio" && <audio src={media.url} controls />}
+        {!media && <div className="media-empty"><AppGlyph glyph="AV" /><p>Files play from memory and are never uploaded.</p></div>}
+      </section>
+    </UtilityShell>
+  );
+}
+
+function CameraApp({ onBack }: { onBack: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [status, setStatus] = useState("Camera is off");
+  const stop = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setStatus("Camera is off");
+  };
+  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  const start = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus("Camera access is unavailable in this browser");
+      return;
+    }
+    try {
+      stop();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setStatus("Camera is on · preview stays local");
+    } catch {
+      setStatus("Camera permission was not granted");
+    }
+  };
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth) {
+      setStatus("Start the camera before capturing");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "camera-capture.png";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setStatus("Capture downloaded");
+    }, "image/png");
+  };
+  return (
+    <UtilityShell title="Camera" onBack={onBack}>
+      <section className="camera-app">
+        <video ref={videoRef} autoPlay muted playsInline />
+        <div>
+          <span>{status}</span>
+          <nav>
+            <button onClick={() => void start()}>Start camera</button>
+            <button onClick={capture}>Capture</button>
+            <button onClick={stop}>Stop</button>
+          </nav>
+        </div>
+      </section>
+    </UtilityShell>
+  );
+}
+
+function WallpaperStudio({
+  onBack,
+  wallpaper,
+  setWallpaper,
+}: {
+  onBack: () => void;
+  wallpaper: Wallpaper;
+  setWallpaper: (wallpaper: Wallpaper) => void;
+}) {
+  return (
+    <UtilityShell title="Wallpaper Studio" onBack={onBack}>
+      <section className="wallpaper-studio">
+        <header><span className="app-eyebrow">Desktop appearance</span><h2>Choose a workspace.</h2></header>
+        <div>
+          <button className={wallpaper === "sunset" ? "active" : ""} onClick={() => setWallpaper("sunset")}>
+            <Image src="/wallpaper.png" width={480} height={270} alt="Sunset ocean wallpaper" />
+            <span><strong>Input to meaning</strong><small>Supplied project image</small></span>
+          </button>
+          <button className={`teal-wallpaper-choice ${wallpaper === "teal" ? "active" : ""}`} onClick={() => setWallpaper("teal")}>
+            <span className="wallpaper-swatch-teal" />
+            <span><strong>Teal geometry</strong><small>Original alternate</small></span>
+          </button>
+        </div>
+      </section>
+    </UtilityShell>
+  );
+}
+
+function PaintApp({ onBack }: { onBack: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const [colour, setColour] = useState("#76a9ff");
+  const draw = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = 6;
+    context.strokeStyle = colour;
+    context.lineTo(
+      (event.clientX - bounds.left) * (canvas.width / bounds.width),
+      (event.clientY - bounds.top) * (canvas.height / bounds.height),
+    );
+    context.stroke();
+  };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.fillStyle = "#07101d";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  };
+  const download = () => {
+    const anchor = document.createElement("a");
+    anchor.href = canvasRef.current?.toDataURL("image/png") ?? "";
+    anchor.download = "support-sketch.png";
+    anchor.click();
+  };
+  return (
+    <UtilityShell title="Paint" onBack={onBack}>
+      <section className="paint-app">
+        <header>
+          <label>Colour <input type="color" value={colour} onChange={(event) => setColour(event.target.value)} /></label>
+          <div><button onClick={clear}>Clear</button><button className="primary-button" onClick={download}>Download PNG</button></div>
+        </header>
+        <canvas
+          ref={canvasRef}
+          width="900"
+          height="520"
+          onPointerDown={(event) => {
+            drawingRef.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const context = event.currentTarget.getContext("2d");
+            if (!context) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            context.beginPath();
+            context.moveTo(
+              (event.clientX - bounds.left) * (event.currentTarget.width / bounds.width),
+              (event.clientY - bounds.top) * (event.currentTarget.height / bounds.height),
+            );
+          }}
+          onPointerMove={draw}
+          onPointerUp={() => { drawingRef.current = false; }}
+          onPointerCancel={() => { drawingRef.current = false; }}
+          aria-label="Drawing canvas"
+        />
+      </section>
+    </UtilityShell>
+  );
+}
+
+function NoughtsAndCrosses({ onBack }: { onBack: () => void }) {
+  const [board, setBoard] = useState(() => Array<string>(9).fill(""));
+  const winner = gameWinner(board);
+  const turn = board.filter(Boolean).length % 2 === 0 ? "X" : "O";
+  return (
+    <div className="mini-game">
+      <nav className="folder-toolbar"><button onClick={onBack}>← Games</button><span>/ Noughts & Crosses</span></nav>
+      <section>
+        <header>
+          <span className="app-eyebrow">Local two-player game</span>
+          <h2>{winner ? winner === "Draw" ? "Draw game" : `${winner} wins` : `${turn}'s turn`}</h2>
+        </header>
+        <div className="noughts-board" aria-label="Noughts and Crosses board">
+          {board.map((cell, index) => (
+            <button
+              key={index}
+              aria-label={`Square ${index + 1}${cell ? `: ${cell}` : ""}`}
+              disabled={Boolean(cell || winner)}
+              onClick={() => setBoard((current) => current.map((value, cellIndex) => cellIndex === index ? turn : value))}
+            >
+              {cell}
+            </button>
+          ))}
+        </div>
+        <button className="quiet-button" onClick={() => setBoard(Array(9).fill(""))}>New game</button>
+      </section>
+    </div>
+  );
+}
+
+const MEMORY_SIGNALS = ["429", "500", "TTFT", "TOKENS", "CACHE", "REQ_ID"];
+
+function shuffledSignals() {
+  return [...MEMORY_SIGNALS, ...MEMORY_SIGNALS]
+    .map((value) => ({ value, order: Math.random() }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ value }, index) => ({ id: index, value }));
+}
+
+function IncidentMemory({ onBack }: { onBack: () => void }) {
+  const [cards, setCards] = useState(shuffledSignals);
+  const [open, setOpen] = useState<number[]>([]);
+  const [matched, setMatched] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (open.length !== 2) return;
+    const [first, second] = open;
+    if (cards[first].value === cards[second].value) {
+      const timer = window.setTimeout(() => {
+        setMatched((current) => [...current, first, second]);
+        setOpen([]);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(() => setOpen([]), 650);
+    return () => window.clearTimeout(timer);
+  }, [cards, open]);
+
+  const reset = () => {
+    setCards(shuffledSignals());
+    setOpen([]);
+    setMatched([]);
+  };
+
+  return (
+    <div className="mini-game">
+      <nav className="folder-toolbar"><button onClick={onBack}>← Games</button><span>/ Incident Memory</span></nav>
+      <section>
+        <header>
+          <span className="app-eyebrow">Match the support signals</span>
+          <h2>{matched.length === cards.length ? "Board cleared" : `${matched.length / 2} of ${cards.length / 2} pairs`}</h2>
+        </header>
+        <div className="memory-board" aria-label="Incident Memory board">
+          {cards.map((card, index) => {
+            const revealed = open.includes(index) || matched.includes(index);
+            return (
+              <button
+                key={card.id}
+                className={revealed ? "revealed" : ""}
+                disabled={revealed || open.length === 2}
+                aria-label={revealed ? card.value : `Hidden card ${index + 1}`}
+                onClick={() => setOpen((current) => [...current, index])}
+              >
+                {revealed ? card.value : "?"}
+              </button>
+            );
+          })}
+        </div>
+        <button className="quiet-button" onClick={reset}>Shuffle and restart</button>
+      </section>
     </div>
   );
 }
@@ -1024,6 +2080,41 @@ function AttributionsDocument() {
     <article className="markdown-app">
       <h1>Attributions and third-party boundaries</h1>
       <p className="markdown-meta">ATTRIBUTIONS.md · links verified 27 July 2026</p>
+      <h2>Dustin Brett / daedalOS</h2>
+      <p>
+        <strong>daedalOS by Dustin Brett</strong> is a direct design and interaction reference. Its desktop metaphor,
+        window management, Start experience, taskbar focus states, and system-tray detail established the quality bar
+        for this original implementation.
+      </p>
+      <p>
+        MIT License · Copyright © 2020 Dustin Brett ·{" "}
+        <a href="https://github.com/DustinBrett/daedalOS" target="_blank" rel="noreferrer">Project and licence ↗</a>
+      </p>
+      <h2>jsagayap / CoffeeOS</h2>
+      <p>
+        <strong>CoffeeOS by jsagayap</strong> is a direct design reference for the approachable file-and-folder desktop
+        conventions used here.
+      </p>
+      <p>
+        MIT License · Copyright © 2022 jsagayap ·{" "}
+        <a href="https://github.com/jsagayap/CoffeeOS" target="_blank" rel="noreferrer">Project and licence ↗</a>
+      </p>
+      <p>No daedalOS or CoffeeOS source code, marks, or bundled assets are copied here.</p>
+      <h2>awesome-web-desktops</h2>
+      <p>
+        Used for comparative research ·{" "}
+        <a href="https://github.com/syxanash/awesome-web-desktops" target="_blank" rel="noreferrer">Project ↗</a>
+      </p>
+      <h2>Hyggshi OS Web Edition</h2>
+      <p>
+        <strong>Hyggshi OS Web Edition by HyggshiOSDeveloper</strong> was researched as a direct functional-inventory
+        reference for common browser-desktop applications. This workstation implements its own support-specific editors,
+        local media tools, camera, settings, and widgets from scratch; no Hyggshi OS source code or assets are copied.
+      </p>
+      <p>
+        HOSL-1.2 custom non-commercial licence · Copyright © 2025–2026 Hyggshi-os-website ·{" "}
+        <a href="https://github.com/HyggshiOSDeveloper/hyggshi-os-website" target="_blank" rel="noreferrer">Project and licence ↗</a>
+      </p>
       <h2>Badger Badger Badger</h2>
       <p>
         Animation and music by <strong>Jonti Picking (Weebl)</strong>. This site embeds the preservation page from
@@ -1032,19 +2123,22 @@ function AttributionsDocument() {
       <p><a href="https://weebls-stuff.com/toons/badgers/" target="_blank" rel="noreferrer">Official creator page ↗</a></p>
       <h2>DOOM on js-dos</h2>
       <p>
-        The miniapp is an external embed of <code>thedoggybrad/doom_on_js-dos</code>, whose wrapper repository is MIT-licensed.
-        DOOM game content and marks remain the property of their respective rights holders. This project does not copy the game archive.
+        A small original local launcher loads the upstream JS-DOS script, cover image, and game archive from
+        <code> thedoggybrad/doom_on_js-dos</code>, whose wrapper repository is MIT-licensed. Its visible manual link
+        opens this site’s local copy. DOOM game content and marks remain the property of their respective rights holders;
+        this project does not redistribute the game archive.
       </p>
       <p><a href="https://github.com/thedoggybrad/doom_on_js-dos" target="_blank" rel="noreferrer">Source and licence ↗</a></p>
-      <h2>Desktop references</h2>
+      <h2>Pyodide</h2>
       <p>
-        daedalOS and CoffeeOS informed the interaction quality bar. The implementation here is original and no upstream source,
-        marks, or bundled assets were copied. The awesome-web-desktops list was used for comparative research.
+        The browser terminal runs the shipped Python files with Pyodide: CPython compiled to WebAssembly.
+        Pyodide is provided under the Mozilla Public License 2.0.
       </p>
+      <p><a href="https://pyodide.org/" target="_blank" rel="noreferrer">Project ↗</a></p>
       <h2>OpenAI</h2>
       <p>
         The downloadable CLI uses the OpenAI Agents SDK. Specialist learning links are restricted to official OpenAI Developer Docs,
-        Cookbook, and Learn pages. The social preview was generated with OpenAI image generation for this project.
+        Cookbook, and Learn pages. The supplied wallpaper and profile card are project assets provided by Ryan.
       </p>
     </article>
   );
@@ -1108,10 +2202,17 @@ function DecisionMarkdownApp() {
 function AboutApp({ openApp }: { openApp: (id: AppId) => void }) {
   return (
     <article className="profile-app">
+      <Image
+        className="codex-profile-card"
+        src="/ryan-profile-card.png"
+        width="998"
+        height="612"
+        alt="Ryan's Codex profile card showing activity and usage statistics"
+      />
       <header className="profile-hero">
         <div className="profile-mark">RW</div>
         <div>
-          <span className="app-eyebrow">Senior Product Manager · Dublin</span>
+          <span className="app-eyebrow">AI Support Engineer (hopefully) · Dublin</span>
           <h2>Systems that earn trust at scale.</h2>
           <p>
             I work where internal platforms, trust-sensitive operations, and AI quality meet—especially when teams need a shared definition of “done”.
@@ -1148,7 +2249,7 @@ function WebsiteFolderApp({ openApp }: { openApp: (id: AppId) => void }) {
     return (
       <div className="website-folder-view">
         <nav className="folder-toolbar" aria-label="Website folder breadcrumb">
-          <button onClick={() => setView("folder")}>← https://ryanw.eu</button>
+          <button onClick={() => setView("folder")}>← About me</button>
           <span>/ {view === "about" ? "About Ryan" : view === "work" ? "Selected Work" : "Field Notes"}</span>
         </nav>
         {view === "about" && <AboutApp openApp={openApp} />}
@@ -1163,7 +2264,7 @@ function WebsiteFolderApp({ openApp }: { openApp: (id: AppId) => void }) {
         <button disabled>←</button>
         <button disabled>→</button>
         <button disabled>↑</button>
-        <span className="folder-path">Desktop / https://ryanw.eu</span>
+        <span className="folder-path">Desktop / About me</span>
       </header>
       <div className="folder-banner">
         <span className="profile-mark">RW</span>
