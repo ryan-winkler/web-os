@@ -151,7 +151,7 @@ function routeIssue(issue: string): RouteResult {
         "Thanks for flagging this. I can see the requests are being rate limited during bursts. Please share a recent request ID and timestamp if available. In the meantime, respect retry headers and use exponential backoff with jitter while reducing concurrent requests. We can then distinguish a transient burst from a quota constraint.",
     };
   }
-  if (/latency|slow|timeout|time.?to.?first|ttft|degraded|taking too long/.test(text)) {
+  if (/latency|slow|time.?out|time.?to.?first|ttft|degraded|taking too long/.test(text)) {
     return {
       route: "LatencyAgent",
       summary,
