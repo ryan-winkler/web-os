@@ -427,7 +427,7 @@ textarea:hover, input:hover { border-color: rgba(255,255,255,.22); }
 .primary-button,
 .quiet-button,
 .danger-button {
-  min-height: 42px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -464,7 +464,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   margin-bottom: 10px;
 }
 .issue-tabs button {
-  min-height: 38px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -685,18 +685,18 @@ td code { color: #b8d2ff; font-weight: 800; }
 }
 .terminal-toolbar > span {
   color: #8fa0b5;
-  font-size: 9px;
+  font-size: 12px;
 }
 .terminal-toolbar > span.working { color: #ffd090; }
 .terminal-toolbar > div { display: flex; gap: 6px; }
 .terminal-toolbar button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 9px;
   border: 1px solid #24344a;
   border-radius: 6px;
   background: #101a28;
   color: #b8d3f7;
-  font: 700 9px/1.2 var(--font-geist-mono), monospace;
+  font: 700 11px/1.2 var(--font-geist-mono), monospace;
   cursor: pointer;
 }
 .terminal-toolbar button:hover { border-color: #42648e; background: #15243a; }
@@ -708,7 +708,7 @@ td code { color: #b8d2ff; font-weight: 800; }
 }
 .terminal-key-panel summary {
   color: #9eb8dc;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .terminal-key-panel > div {
@@ -718,23 +718,23 @@ td code { color: #b8d2ff; font-weight: 800; }
   margin-top: 8px;
 }
 .terminal-key-panel input {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 9px;
   border: 1px solid #24344a;
   border-radius: 4px;
   background: #04080f;
 }
 .terminal-key-panel button {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 9px;
   border: 1px solid #304866;
   border-radius: 4px;
   background: #101a28;
   color: #c6d9f5;
-  font: 700 9px/1 var(--font-geist-mono), monospace;
+  font: 700 11px/1 var(--font-geist-mono), monospace;
   cursor: pointer;
 }
-.terminal-key-panel p { margin: 7px 0 0; color: #7689a3; font-size: 9px; line-height: 1.4; }
+.terminal-key-panel p { margin: 7px 0 0; color: #8fa0b5; font-size: 12px; line-height: 1.4; }
 .terminal-green { color: #a9f7b5; }
 .terminal-amber { color: #ffd28d; }
 .terminal-output {
@@ -756,7 +756,7 @@ td code { color: #b8d2ff; font-weight: 800; }
 .terminal-app input { min-height: 34px; flex: 1; padding: 0; border: 0; background: transparent; color: #eef5ff; outline: 0; }
 .terminal-app input:disabled { cursor: wait; }
 
-.doom-app { height: 100%; display: grid; grid-template-rows: 1fr 38px; background: #050505; }
+.doom-app { height: 100%; display: grid; grid-template-rows: 1fr 48px; background: #050505; }
 .doom-app iframe { width: 100%; height: 100%; min-height: 0; border: 0; background: #121212; }
 .doom-app aside {
   display: flex;
@@ -767,16 +767,16 @@ td code { color: #b8d2ff; font-weight: 800; }
   border-top: 1px solid #303744;
   background: #090d13;
   color: #929bab;
-  font-size: 10px;
+  font-size: 12px;
 }
 .doom-app aside button {
-  min-height: 30px;
+  min-height: 44px;
   padding: 0 10px;
   border: 1px solid #30455f;
   border-radius: 5px;
   background: #111c2b;
   color: #9fc2ff;
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
 }
 .doom-manual { min-height: 100%; background: #0b111a; }
@@ -924,7 +924,7 @@ td code { color: #b8d2ff; font-weight: 800; }
 }
 .folder-toolbar button {
   min-width: 34px;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -936,7 +936,7 @@ td code { color: #b8d2ff; font-weight: 800; }
 .folder-toolbar button:disabled { opacity: .5; }
 .folder-toolbar > span { color: var(--muted); font-size: 11px; }
 .folder-toolbar .folder-download {
-  min-height: 32px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   margin-left: auto;
@@ -949,7 +949,7 @@ td code { color: #b8d2ff; font-weight: 800; }
 }
 .folder-path {
   flex: 1;
-  min-height: 32px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   padding: 0 10px;
@@ -2109,7 +2109,12 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
   .taskbar-apps button { width: 44px; height: 44px; flex-basis: 44px; }
   .taskbar-clock { width: 60px; height: 44px; padding: 0 3px; }
   .show-desktop-button { display: none; }
-  .toast { display: none; }
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: 60px;
+    max-width: none;
+  }
 }
 
 @media (max-width: 420px) {

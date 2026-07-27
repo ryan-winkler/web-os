@@ -320,6 +320,9 @@ export default function Desktop() {
       ...current,
       [id]: { ...current[id], open: true, minimized: false, z: zRef.current },
     }));
+    window.requestAnimationFrame(() => {
+      document.getElementById(`${id}-window`)?.closest<HTMLElement>(".app-window")?.focus({ preventScroll: true });
+    });
   };
 
   const openApp = (id: AppId) => {
@@ -898,6 +901,7 @@ function AppWindow({
       className={`app-window ${state.maximized ? "maximized" : ""}`}
       aria-label={`${title} application`}
       onPointerDown={onFocus}
+      tabIndex={-1}
       style={
         state.maximized
           ? { zIndex: state.z }
@@ -997,6 +1001,7 @@ function RouterApp({
         <button
           className="quiet-button"
           onClick={() => {
+            if ((issue || results.length || draft) && !window.confirm("Clear the customer message and prepared draft?")) return;
             setIssue("");
             setResults([]);
             setDraft("");
