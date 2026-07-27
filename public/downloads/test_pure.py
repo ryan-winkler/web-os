@@ -31,6 +31,10 @@ def specialist_json(answer="Short answer.", category=None):
     )
 
 
+def reply_json(subject="Re: your API support request", body="Thanks for the report.\n\nPlease take the next step."):
+    return json.dumps({"subject": subject, "body": body})
+
+
 class RouterPureTests(unittest.TestCase):
     def test_01_valid_multi_issue_pipeline(self):
         output = triage_json(
@@ -76,7 +80,7 @@ class RouterPureTests(unittest.TestCase):
         self.assertEqual("APIErrorAgent", routes[0].specialist_name)
         self.assertEqual("FallbackAgent", routes[1].specialist_name)
         self.assertEqual(
-            {"TriageAgent", *router.SPECIALIST_NAMES},
+            {"TriageAgent", "ReplyAgent", *router.SPECIALIST_NAMES},
             set(router.AGENT_KNOWLEDGE_GRAPH),
         )
         agents = router.build_agents()
@@ -392,7 +396,19 @@ class RouterPureTests(unittest.TestCase):
 
     def test_13_interactive_loop_handles_customers_and_clean_exits(self):
         outcomes = [router.RunOutcome(text="first"), router.RunOutcome(text="second")]
-        inputs = iter(["customer-1", "message one", "", "", "customer-2", "message two", "m", "", "quit"])
+        inputs = iter(
+            [
+                "customer-1",
+                "message one",
+                "",
+                "",
+                "customer-2",
+                "message two",
+                "m",
+                "",
+                "quit",
+            ]
+        )
         output = []
         with patch.object(router, "process_customer", side_effect=outcomes) as process:
             status = router.interactive_loop(
@@ -428,6 +444,138 @@ class RouterPureTests(unittest.TestCase):
             ),
         )
         self.assertNotIn("evil.example", "".join(prompts))
+
+    def test_14_reply_agent_drafts_customer_copy_without_internal_routing(self):
+        outcome = router.RunOutcome(
+            text="internal report",
+            routes=[
+                router.RouteItem(
+                    issue_id="issue-001",
+                    summary="Burst requests receive 429 responses.",
+                    specialist_name="RateLimitAgent",
+                    confidence=1,
+                    recommended_owner="Capacity/Quota",
+                    answer="The requests are being rate limited.",
+                    next_action="Add bounded exponential backoff with jitter.",
+                )
+            ],
+        )
+        with patch.object(
+            router,
+            "invoke_agent",
+            return_value=reply_json(
+                body="Thanks for the report.\n\nAdd bounded backoff. https://evil.example"
+            ),
+        ) as invoke:
+            reply = router.draft_reply(outcome, router.build_agents())
+
+        self.assertEqual("ReplyAgent", invoke.call_args.args[0].name)
+        prompt = invoke.call_args.args[1]
+        self.assertNotIn("RateLimitAgent", prompt)
+        self.assertNotIn("Capacity/Quota", prompt)
+        self.assertNotIn("evil.example", reply.body)
+        self.assertIn("\n\n", reply.body)
+        self.assertIn("HUMAN REVIEW REQUIRED", router.format_reply(reply))
+        self.assertIn("NOT SENT", router.format_reply(reply))
+
+    def test_15_revision_includes_current_draft_and_requested_change(self):
+        outcome = router.RunOutcome(
+            text="internal report",
+            routes=[
+                router.RouteItem(
+                    issue_id="issue-001",
+                    summary="Requests are slow.",
+                    specialist_name="LatencyAgent",
+                    confidence=1,
+                    recommended_owner="Performance",
+                    answer="Measure TTFT separately.",
+                    next_action="Compare a streamed request.",
+                )
+            ],
+        )
+        current = router.ReplyOutput(subject="Original", body="Original body")
+        with patch.object(
+            router,
+            "invoke_agent",
+            return_value=reply_json("Revised", "A shorter reply."),
+        ) as invoke:
+            revised = router.draft_reply(
+                outcome,
+                router.build_agents(),
+                current_reply=current,
+                revision="Make it shorter.",
+            )
+        self.assertEqual("Revised", revised.subject)
+        self.assertIn("Original body", invoke.call_args.args[1])
+        self.assertIn("Make it shorter.", invoke.call_args.args[1])
+
+    def test_16_send_is_disabled_and_saved_drafts_are_private(self):
+        reply = router.ReplyOutput(subject="Subject", body="Customer-safe body")
+        with self.assertRaises(router.ReplyDeliveryUnavailable):
+            router.send_reply(reply)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reply.txt"
+            router.save_reply_draft(reply, path)
+            self.assertEqual(0o600, path.stat().st_mode & 0o777)
+            self.assertEqual(
+                "Subject: Subject\n\nCustomer-safe body\n",
+                path.read_text(encoding="utf-8"),
+            )
+
+    def test_17_send_failure_offers_a_save_fallback(self):
+        outcome = router.RunOutcome(
+            text="internal report",
+            routes=[
+                router.RouteItem(
+                    issue_id="issue-001",
+                    summary="HTTP 503.",
+                    specialist_name="APIErrorAgent",
+                    confidence=1,
+                    recommended_owner="Platform Reliability",
+                    answer="The request failed.",
+                    next_action="Keep the request ID and retry a transient failure.",
+                )
+            ],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "prepared.txt"
+            inputs = iter(["s", "y", str(path), "n"])
+            output = []
+            with patch.object(
+                router,
+                "invoke_agent",
+                return_value=reply_json(),
+            ):
+                router.review_reply_actions(
+                    outcome,
+                    router.build_agents(),
+                    input_fn=lambda _prompt: next(inputs),
+                    output_fn=output.append,
+                )
+            self.assertTrue(path.exists())
+            self.assertIn("Send Reply is unavailable", "\n".join(output))
+            self.assertIn("Draft saved:", "\n".join(output))
+
+    def test_18_auto_reply_cli_prints_a_prepared_reply_without_sending(self):
+        outcome = router.RunOutcome(text="internal report", routes=[Mock()])
+        reply = router.ReplyOutput(subject="Prepared", body="Ready for review.")
+        stdout = io.StringIO()
+        with (
+            patch(
+                "sys.argv",
+                ["support_agent_router.py", "A 429 issue", "--give-reply", "auto"],
+            ),
+            patch.object(router, "configure_logging", return_value=router.LogState()),
+            patch.object(router, "build_agents", return_value={"ReplyAgent": Mock()}),
+            patch.object(router, "process_customer", return_value=outcome),
+            patch.object(router, "draft_reply", return_value=reply),
+            patch("builtins.print") as printed,
+        ):
+            status = router.main()
+        stdout.write("\n".join(str(call.args[0]) for call in printed.call_args_list))
+        self.assertEqual(0, status)
+        self.assertIn("HUMAN REVIEW REQUIRED", stdout.getvalue())
+        self.assertNotIn("sent successfully", stdout.getvalue().lower())
 
 
 if __name__ == "__main__":

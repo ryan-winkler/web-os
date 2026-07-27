@@ -249,7 +249,7 @@ h2 {
 .section-head > p { margin: 0; }
 .flow {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   border: 1px solid var(--border);
   margin: 74px 0 36px;
   background: var(--panel);
@@ -316,9 +316,51 @@ h2 {
 .console-input textarea:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
 .console-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
 .console-controls span { color: var(--muted); font-size: 12px; }
+.auto-reply {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.auto-reply input { width: 18px; height: 18px; accent-color: var(--green); }
 .console-output { min-height: 196px; padding: 22px; font-size: 13px; line-height: 1.7; }
 .route-output { margin-top: 15px; padding: 13px 16px; border-left: 2px solid var(--magenta); background: rgba(255,0,255,.035); }
 .route-output p { margin: 4px 0; }
+.give-reply { margin-top: 18px; }
+.reply-review { padding: 22px; border-top: 1px solid var(--border); background: rgba(0, 255, 136, .025); }
+.reply-state {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 6px 9px;
+  color: #050509;
+  background: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.reply-review label { display: block; margin-bottom: 10px; color: var(--cyan); font-size: 12px; letter-spacing: .12em; }
+.reply-review textarea {
+  width: 100%;
+  min-height: 300px;
+  resize: vertical;
+  padding: 16px;
+  border: 1px solid var(--border);
+  outline: none;
+  color: var(--text);
+  background: #09090e;
+  line-height: 1.6;
+}
+.reply-review textarea:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+.reply-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.button.send { color: #fff; border-color: var(--magenta); background: rgba(255, 0, 255, .16); }
+.send-blocked { margin-top: 18px; padding: 16px; border: 1px solid var(--magenta); background: rgba(255, 0, 255, .06); }
+.send-blocked strong { color: var(--magenta); }
+.send-blocked p { color: var(--muted); line-height: 1.6; }
+.send-blocked .button { margin: 8px 8px 0 0; }
 
 .install { background-color: #08080d; }
 .install-grid { align-items: center; }

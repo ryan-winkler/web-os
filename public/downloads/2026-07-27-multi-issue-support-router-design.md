@@ -28,6 +28,10 @@ The allowed specialists are:
 feedback. Triage may produce both a technical issue and a feedback issue from the
 same customer message when both are independently actionable.
 
+`ReplyAgent` is not a routing destination. It receives only validated issue
+summaries, specialist answers, and recommended next actions. It turns those into
+one customer-facing subject and body after routing is complete.
+
 ## Orchestration
 
 Use code-controlled orchestration rather than SDK handoffs:
@@ -38,7 +42,9 @@ Use code-controlled orchestration rather than SDK handoffs:
 4. For each detected issue, select the recommended specialist automatically or
    prompt for a manual override.
 5. Invoke exactly one specialist for each detected issue.
-6. Render one combined plain-text result.
+6. Render one combined internal plain-text result.
+7. On request, invoke `ReplyAgent` once to prepare customer-facing copy.
+8. Require a person to review, revise, save, or attempt delivery.
 
 Specialists run sequentially to keep API usage and burst concurrency predictable.
 No conversation or session state is retained between CLI calls.
@@ -55,57 +61,56 @@ Automatic routing is the default:
 python support_agent_router.py "Customer message with one or more issues"
 ```
 
-If the positional message is omitted, the CLI prompts for it. Manual routing uses
-`--manual`; pressing Enter accepts the recommended specialist, while entering an
-allowed specialist name overrides it.
+If the positional message is omitted, the CLI enters an interactive loop. Manual
+routing uses `--manual`; pressing Enter accepts the recommended specialist, while
+entering an allowed specialist name overrides it.
 
-Optional context is loaded with:
+Prepare a customer reply automatically:
 
 ```bash
-python support_agent_router.py --context customer_context.json --manual
+python support_agent_router.py \
+  "We receive 429s and requests are slow." \
+  --give-reply auto
 ```
 
-The accepted JSON fields are:
+Revise the first prepared draft:
 
-```json
-{
-  "region": "EMEA",
-  "account_id": "acct_123",
-  "account_tier": "enterprise",
-  "account_status": "active",
-  "request_ip": "203.0.113.10"
-}
+```bash
+python support_agent_router.py \
+  "We receive 429s." \
+  --give-reply revise \
+  --revision "Make the next action more direct."
 ```
 
-All fields are optional. Without a context file, routing works normally and uses
-`Global / <SpecialistAgent>` as the queue.
-
-The CLI validates JSON shape and IP syntax. It does not perform a third-party
-GeoIP lookup; a supplied region is authoritative.
+`--give-reply send` deliberately fails because no customer messaging API or
+authentication is configured. The CLI then offers to save the prepared reply.
+`--save-draft PATH` provides the same fallback non-interactively.
 
 ## Data handling
 
-Only region, account tier, and account status are provided to agents when present.
-Account ID and request IP remain local and are not included in model prompts or
-printed output. The CLI does not log customer context.
+Customer facts are accepted only when the triage output quotes evidence from the
+original message. Logs contain operational identifiers and routing metadata, not
+the customer message, specialist answer, or reply body. Local logs and saved
+drafts use owner-only file permissions.
 
 ## Output
 
-The final output remains plain text:
+The internal routing output remains plain text:
 
 ```text
-Detected issues: 2
-
+Issues found: 2
 Issue 1: Intermittent 503 responses
-Queue: EMEA / APIErrorAgent
+Selected agent: APIErrorAgent
 Agent flow: TriageAgent -> APIErrorAgent
 Answer: ...
-
 Issue 2: Dissatisfaction with support
-Queue: EMEA / FeedbackAgent
+Selected agent: FeedbackAgent
 Agent flow: TriageAgent -> FeedbackAgent
 Answer: ...
 ```
+
+Prepared replies are visibly marked `HUMAN REVIEW REQUIRED - NOT SENT`. The
+delivery boundary never sends in this interview build.
 
 ## Failure behavior
 
@@ -116,6 +121,8 @@ Answer: ...
 - Empty customer input exits with a clear CLI error.
 - SDK/API failures are not silently swallowed; the CLI reports failure and exits
   nonzero.
+- A Send Reply attempt reports that delivery is unavailable, offers to save the
+  draft, and exits with status 5.
 
 ## Verification
 
@@ -132,6 +139,6 @@ Deterministic checks will cover:
 - Account ID and request IP staying out of prompts and output.
 - `Runner.run_sync` appearing only in `invoke_agent`.
 - Plain-text output shape.
-
-After deterministic checks pass, run one live multi-issue CLI example through the
-OpenAI Agents SDK.
+- Reply generation excludes internal agent and owner names.
+- Revision passes the current draft and human instruction to `ReplyAgent`.
+- Send Reply never calls a network service and offers a private local draft.

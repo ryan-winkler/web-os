@@ -6,6 +6,7 @@ type Route = {
   agent: string;
   issue: string;
   action: string;
+  customerReply: string;
 };
 
 const samples = [
@@ -22,26 +23,31 @@ const routingRules = [
     agent: "RateLimitAgent",
     pattern: /\b(429|rate limit|quota|burst|concurren)/i,
     action: "Inspect the 429 response and headers, then add bounded exponential backoff with jitter.",
+    customerReply: "Please add bounded exponential backoff with jitter and check the rate-limit headers before retrying.",
   },
   {
     agent: "LatencyAgent",
     pattern: /\b(slow|latency|timeout|ttft|time to first token|degraded)/i,
     action: "Measure TTFT and total request time separately, then compare streaming and model choices.",
+    customerReply: "Please measure time to first token and total request time separately, then compare a streamed request.",
   },
   {
     agent: "UsageCostAgent",
     pattern: /\b(token|cost|billing|cache hit|cached token|usage)/i,
     action: "Inspect response.usage and cached-token fields before comparing request shape and volume.",
+    customerReply: "Please check response.usage and the cached-token fields before comparing request shape and volume.",
   },
   {
     agent: "APIErrorAgent",
     pattern: /\b(5\d\d|5xx|failed request|platform error|api error)/i,
     action: "Capture the status, error body, SDK exception, and request ID, then retry only transient failures.",
+    customerReply: "Please retain the status, error body, SDK exception, and request ID, and retry only if the failure is transient.",
   },
   {
     agent: "FeedbackAgent",
     pattern: /\b(frustrated|disappointed|unhappy|complaint|don'?t like|feedback)/i,
     action: "Acknowledge the experience and record a privacy-bounded feedback event for review.",
+    customerReply: "Thank you for being direct about the experience. Your feedback should be reviewed alongside the technical issue.",
   },
 ];
 
@@ -56,7 +62,26 @@ function routeIssue(input: string): Route[] {
         agent: "FallbackAgent",
         issue: input.trim(),
         action: "Ask for the HTTP status, error text, request ID, timing, and a minimal reproduction.",
+        customerReply: "Please share the HTTP status, error text, request ID, timing, and a minimal reproduction so the issue can be narrowed down.",
       }];
+}
+
+function prepareReply(routes: Route[]): string {
+  const actions = routes
+    .map((route, index) => `${index + 1}. ${route.customerReply}`)
+    .join("\n");
+  return `Subject: Follow-up on your OpenAI API support request
+
+Hello,
+
+Thanks for explaining what happened. I understand there ${routes.length === 1 ? "is one issue" : `are ${routes.length} issues`} to work through.
+
+${actions}
+
+This draft has been prepared for a support person to review before it is sent.
+
+Best,
+Support`;
 }
 
 const sourceLinks = [
@@ -71,10 +96,25 @@ const sourceLinks = [
 export default function Home() {
   const [issue, setIssue] = useState(samples[4][1]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [reply, setReply] = useState("");
+  const [autoReply, setAutoReply] = useState(false);
+  const [sendBlocked, setSendBlocked] = useState(false);
 
   function runDemo(event: FormEvent) {
     event.preventDefault();
-    if (issue.trim()) setRoutes(routeIssue(issue));
+    if (!issue.trim()) return;
+    const nextRoutes = routeIssue(issue);
+    setRoutes(nextRoutes);
+    setReply(autoReply ? prepareReply(nextRoutes) : "");
+    setSendBlocked(false);
+  }
+
+  function saveDraft() {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([`${reply}\n`], { type: "text/plain" }));
+    link.download = "support-agent-reply.txt";
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   return (
@@ -102,8 +142,8 @@ export default function Home() {
           </h1>
           <p className="lede">
             A compact Python CLI that separates triage, domain routing, SDK calls,
-            logging, and plain-text presentation. One message can contain several
-            issues; each issue reaches exactly one specialist.
+            logging, and reply preparation. One message can contain several issues;
+            each reaches one specialist before ReplyAgent prepares human-reviewed copy.
           </p>
           <div className="hero-actions">
             <a className="button primary" href="#console">Run browser demo</a>
@@ -125,10 +165,11 @@ export default function Home() {
             <p><span className="magenta">route</span> RateLimitAgent</p>
             <p><span className="magenta">route</span> LatencyAgent</p>
             <p><span className="magenta">route</span> FeedbackAgent</p>
+            <p><span className="cyan">draft</span> ReplyAgent → human review</p>
             <div className="hud-stats">
-              <div><strong>7</strong><span>AGENTS</span></div>
+              <div><strong>8</strong><span>AGENTS</span></div>
               <div><strong>1</strong><span>SDK BOUNDARY</span></div>
-              <div><strong>13</strong><span>NO-NET TESTS</span></div>
+              <div><strong>18</strong><span>NO-NET TESTS</span></div>
             </div>
           </div>
         </aside>
@@ -142,12 +183,12 @@ export default function Home() {
             <p className="question">
               Build an OpenAI Agents SDK support router that invokes TriageAgent first,
               splits multi-issue messages, then invokes exactly one approved specialist
-              per issue and returns a concise plain-text answer.
+              per issue and prepares a concise customer reply.
             </p>
             <p>
               Automatic mode routes immediately. Manual mode lets an operator review the
-              agent and internal owner first. Interactive mode keeps accepting independent
-              messages without carrying conversation history between customers.
+              agent and internal owner first. ReplyAgent drafts the response, but a person
+              must review it. Send Reply is intentionally blocked without API authentication.
             </p>
           </div>
         </div>
@@ -165,11 +206,11 @@ export default function Home() {
         </div>
 
         <div className="flow" aria-label="Routing flow">
-          {["Customer input", "TriageAgent", "Validated routes", "One specialist", "Plain-text answer"].map((step, index) => (
+          {["Customer input", "TriageAgent", "Validated routes", "One specialist", "ReplyAgent", "Human review", "Save or send"].map((step, index, steps) => (
             <div className="flow-step" key={step}>
               <span>0{index + 1}</span>
               <strong>{step}</strong>
-              {index < 4 && <i aria-hidden="true">→</i>}
+              {index < steps.length - 1 && <i aria-hidden="true">→</i>}
             </div>
           ))}
         </div>
@@ -184,8 +225,8 @@ export default function Home() {
           <article>
             <span>APPLICATION</span>
             <h3>Orchestration</h3>
-            <p>Runs triage first, builds independent routes, then calls only the assigned specialists.</p>
-            <code>process_customer() · run_once()</code>
+            <p>Runs triage, assigned specialists, and the optional reply draft in a fixed order.</p>
+            <code>process_customer() · draft_reply()</code>
           </article>
           <article>
             <span>DOMAIN</span>
@@ -196,14 +237,14 @@ export default function Home() {
           <article>
             <span>INFRASTRUCTURE</span>
             <h3>External effects</h3>
-            <p>One small function owns the SDK Runner call. A rotating JSONL file owns operational events.</p>
-            <code>invoke_agent() · configure_logging()</code>
+            <p>One function owns SDK calls. Logging is local; delivery fails closed until API and auth exist.</p>
+            <code>invoke_agent() · send_reply()</code>
           </article>
           <article>
             <span>PRESENTATION</span>
-            <h3>Printable report</h3>
-            <p>Formatting is separate from routing so output remains inspectable and easy to change.</p>
-            <code>format_report()</code>
+            <h3>Report + reply</h3>
+            <p>Internal routing details stay separate from the customer-facing subject and body.</p>
+            <code>format_report() · format_reply()</code>
           </article>
         </div>
       </section>
@@ -223,7 +264,7 @@ export default function Home() {
                   key={label}
                   type="button"
                   aria-pressed={issue === text}
-                  onClick={() => { setIssue(text); setRoutes([]); }}
+                  onClick={() => { setIssue(text); setRoutes([]); setReply(""); setSendBlocked(false); }}
                 >
                   {label}
                 </button>
@@ -250,6 +291,14 @@ export default function Home() {
                 <span>{issue.length} / 10,000</span>
                 <button className="button primary" type="submit">Run routing demo</button>
               </div>
+              <label className="auto-reply">
+                <input
+                  type="checkbox"
+                  checked={autoReply}
+                  onChange={(event) => setAutoReply(event.target.checked)}
+                />
+                Auto-prepare reply after routing — review still required
+              </label>
             </div>
             <div className="console-output" aria-live="polite">
               {routes.length === 0 ? (
@@ -265,9 +314,51 @@ export default function Home() {
                       <p>Next action: {route.action}</p>
                     </div>
                   ))}
+                  <button
+                    className="button secondary give-reply"
+                    type="button"
+                    onClick={() => { setReply(prepareReply(routes)); setSendBlocked(false); }}
+                  >
+                    Give reply
+                  </button>
                 </>
               )}
             </div>
+            {reply && (
+              <div className="reply-review">
+                <div className="reply-state">HUMAN REVIEW REQUIRED · NOT SENT</div>
+                <label htmlFor="prepared-reply">PREPARED CUSTOMER REPLY</label>
+                <textarea
+                  id="prepared-reply"
+                  value={reply}
+                  onChange={(event) => { setReply(event.target.value); setSendBlocked(false); }}
+                  rows={14}
+                />
+                <div className="reply-actions">
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() => document.getElementById("prepared-reply")?.focus()}
+                  >
+                    Revise
+                  </button>
+                  <button className="button secondary" type="button" onClick={saveDraft}>
+                    Save Draft
+                  </button>
+                  <button className="button send" type="button" onClick={() => setSendBlocked(true)}>
+                    Send Reply
+                  </button>
+                </div>
+                {sendBlocked && (
+                  <div className="send-blocked" role="alert">
+                    <strong>Send Reply is unavailable.</strong>
+                    <p>No customer messaging API or authentication is connected. Save the reviewed draft instead.</p>
+                    <button className="button primary" type="button" onClick={saveDraft}>Save Draft</button>
+                    <button className="button secondary" type="button" onClick={() => setSendBlocked(false)}>Cancel</button>
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         </div>
       </section>
@@ -282,6 +373,7 @@ export default function Home() {
               <li>Create a virtual environment.</li>
               <li>Install the Agents SDK and Pydantic.</li>
               <li>Set your API key, then run interactive or one-shot mode.</li>
+              <li>Use Give reply to draft, revise, or test the fail-closed send path.</li>
             </ol>
             <p className="note">
               Python 3.10+ recommended. API keys stay in your environment; they are
@@ -301,7 +393,15 @@ python support_agent_router.py
 python support_agent_router.py --manual \\
   "429s and slow responses"
 
-# 13 tests, 0 network
+# prepare a reply automatically; it is not sent
+python support_agent_router.py \\
+  "429s and slow responses" --give-reply auto
+
+# demonstrate blocked delivery, then offer to save
+python support_agent_router.py \\
+  "Requests fail with 503" --give-reply send
+
+# 18 tests, 0 network
 python test_pure.py`}</code></pre>
           </div>
         </div>
@@ -311,7 +411,7 @@ python test_pure.py`}</code></pre>
             <span>PY</span><strong>support_agent_router.py</strong><small>Main CLI · Agents SDK</small><i>↓</i>
           </a>
           <a href="/downloads/test_pure.py" download>
-            <span>TEST</span><strong>test_pure.py</strong><small>13 tests · zero network</small><i>↓</i>
+            <span>TEST</span><strong>test_pure.py</strong><small>18 tests · zero network</small><i>↓</i>
           </a>
           <a href="/downloads/test_support_agent_router.py" download>
             <span>TEST</span><strong>test_support_agent_router.py</strong><small>Core interview tests</small><i>↓</i>

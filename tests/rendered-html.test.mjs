@@ -22,6 +22,8 @@ test("renders the finished case study", async () => {
   assert.match(html, /<title>Support Agent Router — OpenAI Agents SDK<\/title>/i);
   assert.match(html, /SUPPORT AGENT/);
   assert.match(html, /Run routing demo/);
+  assert.match(html, /ReplyAgent/);
+  assert.match(html, /Send Reply is intentionally blocked/);
   assert.match(html, /Thank you to OpenAI/);
   assert.match(html, /support_agent_router\.py/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);

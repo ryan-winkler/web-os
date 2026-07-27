@@ -1,4 +1,4 @@
-"""Interactive, multi-issue customer-support routing with the OpenAI Agents SDK."""
+"""Route support issues and prepare human-reviewed customer replies with Agents SDK."""
 
 import argparse
 import json
@@ -127,6 +127,10 @@ AGENT_KNOWLEDGE_GRAPH = {
         "original issue and manual-review queue; no external lookup",
         ("production", "learn"),
     ),
+    "ReplyAgent": (
+        "validated issue summaries and specialist answers; no inbox or messaging API",
+        ("prompting", "production"),
+    ),
 }
 
 MAX_MESSAGE_CHARS = 10_000
@@ -201,6 +205,17 @@ class SpecialistOutput(StrictModel):
     feedback_category: FeedbackCategory | None = None
 
 
+class ReplyOutput(StrictModel):
+    """A customer-facing reply that still requires human approval."""
+
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=6_000)
+
+
+class ReplyDeliveryUnavailable(RuntimeError):
+    """Raised when Send Reply is selected without an approved delivery adapter."""
+
+
 @dataclass(slots=True)
 class RouteItem:
     """A Python-validated issue and its resolved specialist and owner."""
@@ -272,13 +287,14 @@ def _knowledge_context(agent_name: str) -> str:
         f"Inspection surface: {inspection_surface}.\n"
         f"Approved OpenAI context sources:\n{sources}\n"
         "Treat these as static references, not proof of live customer or platform "
-        "state. Do not add URLs to your answer; Python appends the approved links."
+        "state. Do not add URLs to model-authored text; Python controls any displayed "
+        "approved links."
     )
 
 
 def build_agents(model: str = "gpt-4.1-mini") -> dict:
     """
-    Return a dictionary containing TriageAgent and all specialist agents.
+    Return TriageAgent, ReplyAgent, and all specialist agents.
     """
     specialist_instructions = {
         "RateLimitAgent": (
@@ -340,6 +356,22 @@ def build_agents(model: str = "gpt-4.1-mini") -> dict:
             "request history, identity, quota, usage, or ownership. Request IDs are "
             "extracted by Python and must not be returned as customer facts.\n"
             f"{_knowledge_context('TriageAgent')}"
+        ),
+    )
+    agents["ReplyAgent"] = Agent(
+        name="ReplyAgent",
+        model=model,
+        output_type=ReplyOutput,
+        instructions=(
+            "Prepare one concise plain-text customer reply from the validated issue "
+            "summaries, specialist answers, and recommended next actions supplied by "
+            "Python. Acknowledge the customer's experience and cover every issue. Do "
+            "not mention agent names, internal owners, confidence, routing, or the "
+            "knowledge graph. Do not claim an investigation, account change, incident, "
+            "message delivery, or timeline unless the supplied facts establish it. "
+            "Return a short subject and body. The reply always requires human approval "
+            "and must never imply that it has been sent.\n"
+            f"{_knowledge_context('ReplyAgent')}"
         ),
     )
     return agents
@@ -452,6 +484,21 @@ def parse_specialist_output(output: str) -> SpecialistOutput:
         update={
             "answer": _safe_text(parsed.answer),
             "recommended_next_action": _safe_text(parsed.recommended_next_action),
+        }
+    )
+
+
+def parse_reply_output(output: str) -> ReplyOutput:
+    """Validate and sanitize one structured customer reply."""
+    try:
+        parsed = ReplyOutput.model_validate_json(output.strip())
+    except (ValidationError, ValueError) as exc:
+        raise ValueError("invalid reply output") from exc
+    body = "\n".join(_safe_text(line) for line in parsed.body.splitlines()).strip()
+    return parsed.model_copy(
+        update={
+            "subject": _safe_text(parsed.subject),
+            "body": body,
         }
     )
 
@@ -793,6 +840,151 @@ def process_customer(
     )
 
 
+def draft_reply(
+    outcome: RunOutcome,
+    agents: dict,
+    *,
+    current_reply: ReplyOutput | None = None,
+    revision: str = "",
+) -> ReplyOutput:
+    """Ask ReplyAgent to turn validated specialist results into customer-safe copy."""
+    if not outcome.routes:
+        raise ValueError("a routed issue is required before drafting a reply")
+    if len(revision) > 2_000:
+        raise ValueError("revision instructions cannot exceed 2000 characters")
+
+    source = [
+        {
+            "issue": route.summary,
+            "answer": route.answer,
+            "recommended_next_action": route.next_action,
+        }
+        for route in outcome.routes
+    ]
+    prompt = (
+        "Prepare a customer reply from this validated support result:\n"
+        f"{json.dumps(source, ensure_ascii=False)}"
+    )
+    if current_reply is not None:
+        prompt += (
+            "\nRevise this current draft:\n"
+            f"{current_reply.model_dump_json()}\n"
+            f"Human revision request: {_safe_text(revision)}"
+        )
+    return parse_reply_output(invoke_agent(agents["ReplyAgent"], prompt))
+
+
+def format_reply(reply: ReplyOutput) -> str:
+    """Render a prepared reply with an explicit human-review state."""
+    return (
+        "Prepared customer reply\n"
+        "HUMAN REVIEW REQUIRED - NOT SENT\n"
+        f"Subject: {reply.subject}\n\n"
+        f"{reply.body}"
+    )
+
+
+def save_reply_draft(
+    reply: ReplyOutput,
+    path: str | Path = "support_agent_reply.txt",
+) -> Path:
+    """Save a prepared reply locally with owner-only permissions."""
+    draft_path = Path(path)
+    descriptor = os.open(
+        draft_path,
+        os.O_CREAT | os.O_TRUNC | os.O_WRONLY,
+        0o600,
+    )
+    os.chmod(draft_path, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(f"Subject: {reply.subject}\n\n{reply.body}\n")
+    return draft_path
+
+
+def send_reply(reply: ReplyOutput) -> None:
+    """Delivery boundary: intentionally disabled until API and auth are approved."""
+    # Future authenticated integration:
+    # client = ApprovedSupportClient(token=os.environ["SUPPORT_API_TOKEN"])
+    # client.send_reply(subject=reply.subject, body=reply.body)
+    raise ReplyDeliveryUnavailable(
+        "Send Reply is unavailable: no customer messaging API or authentication "
+        "is configured."
+    )
+
+
+def _save_reply_prompt(reply: ReplyOutput, input_fn, output_fn) -> None:
+    try:
+        answer = input_fn(
+            "Would you like to save the prepared reply? [Y/n]: "
+        ).strip().lower()
+    except EOFError:
+        output_fn("Draft was not saved.")
+        return
+    if answer not in {"", "y", "yes"}:
+        return
+    try:
+        path = input_fn("Draft path [support_agent_reply.txt]: ").strip()
+    except EOFError:
+        path = ""
+    try:
+        saved = save_reply_draft(reply, path or "support_agent_reply.txt")
+    except OSError:
+        output_fn("Draft could not be saved. Choose a writable path and try again.")
+    else:
+        output_fn(f"Draft saved: {saved}")
+
+
+def review_reply_actions(
+    outcome: RunOutcome,
+    agents: dict,
+    *,
+    input_fn=input,
+    output_fn=print,
+) -> ReplyOutput | None:
+    """Offer Draft, Revise, Save, and deliberately gated Send Reply actions."""
+    reply = None
+    while True:
+        action = input_fn(
+            "Reply action: [D]raft Reply, [R]evise, [S]end Reply, "
+            "[V]Save Draft, [N]one [N]: "
+        ).strip().lower() or "n"
+        if action in {"n", "none", "q", "quit"}:
+            return reply
+        if action in {"d", "draft"}:
+            reply = draft_reply(outcome, agents)
+            output_fn(format_reply(reply))
+            continue
+        if action in {"r", "revise"}:
+            reply = reply or draft_reply(outcome, agents)
+            revision = input_fn("Revision instructions: ").strip()
+            if not revision:
+                output_fn("Revision instructions are required.")
+                continue
+            reply = draft_reply(
+                outcome,
+                agents,
+                current_reply=reply,
+                revision=revision,
+            )
+            output_fn(format_reply(reply))
+            continue
+        if action in {"v", "save"}:
+            reply = reply or draft_reply(outcome, agents)
+            output_fn(format_reply(reply))
+            _save_reply_prompt(reply, input_fn, output_fn)
+            continue
+        if action in {"s", "send"}:
+            reply = reply or draft_reply(outcome, agents)
+            output_fn(format_reply(reply))
+            try:
+                send_reply(reply)
+            except ReplyDeliveryUnavailable as exc:
+                output_fn(str(exc))
+                _save_reply_prompt(reply, input_fn, output_fn)
+            continue
+        output_fn("Invalid action; choose D, R, S, V, or N.")
+
+
 def _process_follow_up_feedback(
     feedback: str,
     customer_id: str,
@@ -928,6 +1120,14 @@ def interactive_loop(
             if status:
                 output_fn(f"Status: {status}")
 
+            if outcome.routes:
+                review_reply_actions(
+                    outcome,
+                    agents,
+                    input_fn=input_fn,
+                    output_fn=output_fn,
+                )
+
             feedback = input_fn("Customer feedback (Enter to skip): ").strip()
             if feedback:
                 feedback_outcome = _process_follow_up_feedback(
@@ -952,6 +1152,26 @@ def main() -> int:
     parser.add_argument("--manual", action="store_true", help="Review routes before specialists run.")
     parser.add_argument("--model", default="gpt-4.1-mini", help="OpenAI model used by all agents.")
     parser.add_argument(
+        "--give-reply",
+        nargs="?",
+        const="prepared",
+        choices=("prepared", "auto", "draft", "revise", "send"),
+        help=(
+            "Prepare a human-reviewed customer reply. 'auto' drafts immediately; "
+            "'send' demonstrates the disabled delivery boundary."
+        ),
+    )
+    parser.add_argument(
+        "--revision",
+        default="",
+        help="Revision instruction used with --give-reply revise.",
+    )
+    parser.add_argument(
+        "--save-draft",
+        metavar="PATH",
+        help="Save the prepared reply locally with owner-only permissions.",
+    )
+    parser.add_argument(
         "--log-file",
         default="support_agent_router.log",
         help="Local rotating JSON-Lines text log.",
@@ -963,6 +1183,8 @@ def main() -> int:
             parser.error("issue cannot be empty")
         if len(args.issue) > MAX_MESSAGE_CHARS:
             parser.error(f"issue cannot exceed {MAX_MESSAGE_CHARS} characters")
+    if args.give_reply == "revise" and not args.revision.strip():
+        parser.error("--revision is required with --give-reply revise")
 
     log_state = configure_logging(args.log_file)
     agents = build_agents(args.model)
@@ -982,7 +1204,38 @@ def main() -> int:
         log_state=log_state,
     )
     print(outcome.text)
-    return exit_status(outcome)
+    status = exit_status(outcome)
+    if not args.give_reply or not outcome.routes:
+        return status
+
+    try:
+        reply = draft_reply(outcome, agents)
+        if args.give_reply == "revise":
+            reply = draft_reply(
+                outcome,
+                agents,
+                current_reply=reply,
+                revision=args.revision,
+            )
+        print(f"\n{format_reply(reply)}")
+        if args.give_reply == "send":
+            try:
+                send_reply(reply)
+            except ReplyDeliveryUnavailable as exc:
+                print(str(exc))
+                if args.save_draft:
+                    saved = save_reply_draft(reply, args.save_draft)
+                    print(f"Draft saved: {saved}")
+                else:
+                    _save_reply_prompt(reply, input, print)
+                return 5
+        elif args.save_draft:
+            saved = save_reply_draft(reply, args.save_draft)
+            print(f"Draft saved: {saved}")
+    except Exception:
+        print("Reply preparation failed; review the routed result manually.", file=sys.stderr)
+        return 1
+    return status
 
 
 if __name__ == "__main__":
