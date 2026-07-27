@@ -642,23 +642,25 @@ export default function Desktop() {
               </button>
             ))}
           </div>
-          <section className="start-recents" aria-label="Recent interview files">
-            <header>
-              <strong>Interview files</strong>
-              <span>
-                <a href={DOWNLOAD_ARCHIVE} download>Download all</a>
-                <button onClick={() => openApp("files")}>Open folder</button>
-              </span>
-            </header>
-            <div>
-              {filteredFiles.slice(0, 3).map((file) => (
-                <button key={file.name} onClick={() => file.name.endsWith(".py") ? runInTerminal(`python ${file.name}`) : openApp("files")}>
-                  <DesktopArtifact kind="file" glyph={file.glyph} />
-                  <span><strong>{file.name}</strong><small>{file.description}</small></span>
-                </button>
-              ))}
-            </div>
-          </section>
+          {filteredFiles.length > 0 && (
+            <section className="start-recents" aria-label="Recent interview files">
+              <header>
+                <strong>Interview files</strong>
+                <span>
+                  <a href={DOWNLOAD_ARCHIVE} download>Download all</a>
+                  <button onClick={() => openApp("files")}>Open folder</button>
+                </span>
+              </header>
+              <div>
+                {filteredFiles.slice(0, 3).map((file) => (
+                  <button key={file.name} onClick={() => file.name.endsWith(".py") ? runInTerminal(`python ${file.name}`) : openApp("files")}>
+                    <DesktopArtifact kind="file" glyph={file.glyph} />
+                    <span><strong>{file.name}</strong><small>{file.description}</small></span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           {!filteredApps.length && !filteredFiles.length && (
             <p className="start-empty">No matching app or file.</p>
           )}
