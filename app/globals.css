@@ -169,6 +169,7 @@ h1::after {
 .button.primary { color: #050509; border-color: var(--green); background: var(--green); }
 .button.secondary { background: rgba(18,18,26,.8); color: var(--text); }
 .button:hover, .button:focus-visible { box-shadow: 0 0 25px rgba(0,255,136,.25); transform: translateY(-1px); }
+.button:active { box-shadow: none; transform: translateY(1px); }
 .microcopy { color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 .terminal {
@@ -292,6 +293,13 @@ h2 {
   cursor: pointer;
 }
 .sample-list button:hover, .sample-list button:focus-visible { border-color: var(--cyan); color: var(--cyan); }
+.sample-list button[aria-pressed="true"] {
+  border-color: var(--green);
+  color: #050509;
+  background: var(--green);
+  box-shadow: 0 0 18px rgba(0, 255, 136, .18);
+}
+.sample-list button:active { transform: translateY(1px); }
 .console-input { padding: 22px; border-bottom: 1px solid var(--border); }
 .console-input label { display: block; color: var(--cyan); font-size: 12px; letter-spacing: .12em; margin-bottom: 10px; }
 .console-input textarea {

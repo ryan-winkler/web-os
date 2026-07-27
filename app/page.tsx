@@ -219,7 +219,12 @@ export default function Home() {
             </p>
             <div className="sample-list" aria-label="Example issues">
               {samples.map(([label, text]) => (
-                <button key={label} type="button" onClick={() => { setIssue(text); setRoutes([]); }}>
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={issue === text}
+                  onClick={() => { setIssue(text); setRoutes([]); }}
+                >
                   {label}
                 </button>
               ))}
@@ -237,6 +242,7 @@ export default function Home() {
                 id="issue"
                 value={issue}
                 maxLength={10000}
+                required
                 onChange={(event) => setIssue(event.target.value)}
                 rows={5}
               />
