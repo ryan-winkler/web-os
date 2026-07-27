@@ -536,6 +536,7 @@ export default function Desktop() {
                   onDraftSaved={incrementDrafts}
                   notify={setToast}
                   openApp={openApp}
+                  runInTerminal={runInTerminal}
                 />
               )}
               {id === "tools" && <ToolsApp />}
@@ -1073,11 +1074,13 @@ function SupportFolderApp({
   onDraftSaved,
   notify,
   openApp,
+  runInTerminal,
 }: {
   onRouted: (count: number) => void;
   onDraftSaved: () => void;
   notify: (message: string) => void;
   openApp: (id: AppId) => void;
+  runInTerminal: (command: string) => void;
 }) {
   const [routerOpen, setRouterOpen] = useState(false);
   if (routerOpen) {
@@ -1100,29 +1103,33 @@ function SupportFolderApp({
         <span className="folder-path">Public / Support Router</span>
       </header>
       <div className="folder-banner support-folder-banner">
-        <span className="profile-mark">SLA</span>
+        <DesktopArtifact kind="file" glyph="PY" />
         <div>
-          <span className="app-eyebrow">Customer support operations</span>
-          <h2>Triage, investigate, prepare, review.</h2>
-          <p>Local demo tools with an explicit human approval boundary.</p>
+          <span className="app-eyebrow">Python support router</span>
+          <h2>Run the CLI. Review before send.</h2>
+          <p>The real script runs in Command Prompt. Delivery remains disabled.</p>
         </div>
       </div>
-      <div className="folder-grid">
+      <div className="support-action-list">
+        <button className="primary" onClick={() => runInTerminal("python3 support_agent_router.py --help")}>
+          <span className="support-action-index">01</span>
+          <span><strong>Run the Python CLI</strong><small>Execute support_agent_router.py in Command Prompt</small></span>
+          <span aria-hidden="true">→</span>
+        </button>
         <button onClick={() => setRouterOpen(true)}>
-          <AppGlyph glyph="AI" />
-          <span><strong>Support Router</strong><small>Route issues and prepare customer replies</small></span>
+          <span className="support-action-index">02</span>
+          <span><strong>Open the reply builder</strong><small>Triage, draft, revise, and test the fail-closed send boundary</small></span>
+          <span aria-hidden="true">→</span>
         </button>
         <button onClick={() => openApp("tools")}>
-          <AppGlyph glyph="SLA" />
+          <span className="support-action-index">03</span>
           <span><strong>Support Tools</strong><small>Timer, request IDs, backoff, and HTTP reference</small></span>
-        </button>
-        <button onClick={() => openApp("terminal")}>
-          <AppGlyph glyph=">_" />
-          <span><strong>Local Console</strong><small>Safe commands for the browser demo</small></span>
+          <span aria-hidden="true">→</span>
         </button>
         <button onClick={() => openApp("help")}>
-          <AppGlyph glyph="?" />
+          <span className="support-action-index">04</span>
           <span><strong>Help & UX Review</strong><small>Safeguards, shortcuts, and heuristic checks</small></span>
+          <span aria-hidden="true">→</span>
         </button>
       </div>
       <footer className="folder-status">4 tools · No customer messaging API connected</footer>

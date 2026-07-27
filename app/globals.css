@@ -1000,6 +1000,40 @@ td code { color: #b8d2ff; font-weight: 800; }
 .folder-grid strong, .folder-grid small { display: block; }
 .folder-grid strong { font-size: 12px; }
 .folder-grid small { margin-top: 5px; color: var(--dim); font-size: 9px; line-height: 1.35; }
+.support-action-list {
+  display: grid;
+  gap: 1px;
+  margin: 18px 22px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.support-action-list button {
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 14px;
+  border: 0;
+  background: #0a121f;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.support-action-list button:hover,
+.support-action-list button:focus-visible { background: #122238; }
+.support-action-list button.primary { background: #102849; }
+.support-action-list button.primary:hover,
+.support-action-list button.primary:focus-visible { background: #17355c; }
+.support-action-list strong,
+.support-action-list small { display: block; }
+.support-action-list strong { font-size: 13px; }
+.support-action-list small { margin-top: 4px; color: #91a0b4; font-size: 11px; line-height: 1.35; }
+.support-action-list > button > span:last-child { color: #8eb8f5; font-size: 20px; }
+.support-action-index {
+  color: #8db8f6;
+  font: 700 11px/1 var(--font-geist-mono), monospace;
+}
 .folder-status {
   min-height: 32px;
   margin-top: auto;
