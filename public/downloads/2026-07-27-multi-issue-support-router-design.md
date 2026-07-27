@@ -48,6 +48,8 @@ Use code-controlled orchestration rather than SDK handoffs:
 
 Specialists run sequentially to keep API usage and burst concurrency predictable.
 No conversation or session state is retained between CLI calls.
+Each runner invocation is limited to one model turn. Agents have capped output,
+no tools, and no handoffs.
 
 The original public functions remain available: `build_agents`, `invoke_agent`,
 `select_agent`, `answer_issue`, and `run_once`. `Runner.run_sync` remains confined
@@ -86,12 +88,29 @@ python support_agent_router.py \
 authentication is configured. The CLI then offers to save the prepared reply.
 `--save-draft PATH` provides the same fallback non-interactively.
 
+`--api-key` configures a key for the current process only with tracing disabled.
+The flag exists for the exercise, but `OPENAI_API_KEY` is recommended because
+shell history and operating-system process listings can expose command-line
+arguments.
+
 ## Data handling
 
 Customer facts are accepted only when the triage output quotes evidence from the
 original message. Logs contain operational identifiers and routing metadata, not
 the customer message, specialist answer, or reply body. Local logs and saved
 drafts use owner-only file permissions.
+
+Customer content is capped at 10,000 characters, key-like values are redacted
+before the first model call, and every agent receives the remaining text inside
+an `untrusted_customer_content` data envelope. Agent instructions explicitly
+reject role changes, prompt disclosure, credential requests, tool requests, and
+review bypasses found inside that data. Model output is schema-validated and
+sanitised before formatting.
+
+The browser terminal can keep a key in an isolated Web Worker for the current
+tab and discard the complete worker on request. It never places the key in
+React state, command history, local storage, output, or downloads. Local
+`OPENAI_API_KEY` remains safer than entering a secret into any public page.
 
 ## Output
 

@@ -9,6 +9,7 @@ const FILES = [
 ];
 
 let runtimePromise;
+let sessionApiKey = "";
 
 function progress(message) {
   self.postMessage({ type: "progress", message });
@@ -35,7 +36,10 @@ await micropip.install("openai-agents", reinstall=True)
 }
 
 async function run(command) {
-  const { file, args } = parsePythonCommand(command);
+  const { file, args: parsedArgs } = parsePythonCommand(command);
+  const args = file === "support_agent_router.py" && sessionApiKey
+    ? [...parsedArgs, "--api-key", sessionApiKey]
+    : parsedArgs;
   runtimePromise ??= bootRuntime().catch((error) => {
     runtimePromise = undefined;
     throw error;
@@ -76,10 +80,26 @@ finally:
   `);
   const result = proxy.toJs({ dict_converter: Object.fromEntries });
   proxy.destroy();
-  return result;
+  const redact = (value) => String(value ?? "")
+    .split(sessionApiKey || "\u0000").join(sessionApiKey ? "[secret redacted]" : "")
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[secret redacted]");
+  return {
+    ...result,
+    stdout: redact(result.stdout),
+    stderr: redact(result.stderr),
+  };
 }
 
 self.onmessage = async ({ data }) => {
+  if (data.type === "set-key") {
+    sessionApiKey = String(data.apiKey ?? "");
+    self.postMessage({
+      type: "key-status",
+      message: sessionApiKey ? "Session key loaded in isolated worker memory" : "No session key loaded",
+    });
+    return;
+  }
+  if (data.type !== "run") return;
   try {
     self.postMessage({ type: "result", ...(await run(data.command)) });
   } catch (error) {

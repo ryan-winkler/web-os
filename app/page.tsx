@@ -44,16 +44,23 @@ type PythonRunResult = {
   stderr: string;
   exitCode: number;
 };
+type TerminalRequest = { id: number; command: string };
+type DesktopContextMenu = {
+  x: number;
+  y: number;
+  target: "desktop" | "public" | "python";
+  fileName?: string;
+};
 
 const APPS: Record<AppId, { title: string; glyph: string; description: string }> = {
   doom: { title: "DOOM — js-dos", glyph: "D00M", description: "The classic desktop break, embedded from the requested js-dos build" },
   games: { title: "Games", glyph: "GAME", description: "DOOM and two small local break games" },
   utilities: { title: "Utilities", glyph: "UTIL", description: "Scratchpad, calculator, image viewer, and system monitor" },
   flash: { title: "Flash Files", glyph: "SWF", description: "Badger Badger Badger and third-party attributions" },
-  router: { title: "Support Workbench", glyph: "AI", description: "Router, operational tools, console, and help" },
+  router: { title: "Support Router", glyph: "PY", description: "Route customer issues and prepare a human-reviewed reply" },
   tools: { title: "Support Tools", glyph: "SLA", description: "Timers, request IDs, backoff, and status codes" },
-  files: { title: "Documentation", glyph: "DIR", description: "Source, tests, README, and design notes" },
-  terminal: { title: "support_agent_router.py — CLI", glyph: ">_", description: "Browser-safe command-line mirror of the Python workflow" },
+  files: { title: "Public", glyph: "DIR", description: "Apps, source, tests, README, downloads, and project notes" },
+  terminal: { title: "Command Prompt — support_agent_router.py", glyph: ">_", description: "Run the shipped Python files in the command console" },
   about: { title: "About me", glyph: "RW", description: "Profile card, selected work, and field notes" },
   work: { title: "Selected Work", glyph: "LAB", description: "Current systems and public projects" },
   notes: { title: "PROCESS.md", glyph: "MD", description: "Decisions, boundaries, and interview notes" },
@@ -127,7 +134,7 @@ const INITIAL_WINDOWS: Record<AppId, WindowState> = {
 const DEFAULT_ISSUE =
   "We are seeing intermittent 429s during traffic bursts and customers are waiting too long for a response.";
 const PUBLIC_APPS: AppId[] = ["doom", "games", "utilities", "flash", "router", "tools", "files", "terminal", "about", "help"];
-const TASKBAR_PINNED: AppId[] = ["files", "games", "terminal", "router", "notes", "tools"];
+const TASKBAR_PINNED: AppId[] = ["files", "terminal", "router"];
 const DOWNLOAD_ARCHIVE = "/downloads/support-agent-router-interview.zip";
 
 function routeIssue(issue: string): RouteResult {
@@ -216,10 +223,10 @@ function downloadText(filename: string, text: string) {
 export default function Desktop() {
   const [windows, setWindows] = useState(INITIAL_WINDOWS);
   const [startOpen, setStartOpen] = useState(false);
-  const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
   const [trayPanel, setTrayPanel] = useState<TrayPanel>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<DesktopContextMenu | null>(null);
+  const [terminalRequest, setTerminalRequest] = useState<TerminalRequest | null>(null);
   const [wallpaper, setWallpaper] = useState<Wallpaper>("sunset");
   const [desktopRevealed, setDesktopRevealed] = useState(false);
   const [desktopLayoutVersion, setDesktopLayoutVersion] = useState(0);
@@ -257,15 +264,13 @@ export default function Desktop() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setLauncherOpen(true);
-        setStartOpen(false);
+        setStartOpen(true);
         setTrayPanel(null);
         window.setTimeout(() => launcherRef.current?.focus(), 20);
       }
       if (event.shiftKey && event.key === "Escape") {
         event.preventDefault();
         setStartOpen((current) => !current);
-        setLauncherOpen(false);
         setTrayPanel(null);
       }
       if (event.shiftKey && event.key === "F10") {
@@ -278,13 +283,24 @@ export default function Desktop() {
       }
       if (event.key === "Escape") {
         setStartOpen(false);
-        setLauncherOpen(false);
         setTrayPanel(null);
         setContextMenu(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const closeTransientPanels = (event: globalThis.PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest(".start-menu, .taskbar, .tray-panel, .desktop-context-menu")) return;
+      setStartOpen(false);
+      setTrayPanel(null);
+      setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", closeTransientPanels);
+    return () => document.removeEventListener("pointerdown", closeTransientPanels);
   }, []);
 
   const focusApp = (id: AppId) => {
@@ -298,11 +314,19 @@ export default function Desktop() {
   const openApp = (id: AppId) => {
     focusApp(id);
     setStartOpen(false);
-    setLauncherOpen(false);
     setTrayPanel(null);
     setContextMenu(null);
     setDesktopRevealed(false);
     setToast(`${APPS[id].title} opened.`);
+  };
+
+  const runInTerminal = (command: string) => {
+    focusApp("terminal");
+    setTerminalRequest({ id: Date.now(), command });
+    setStartOpen(false);
+    setTrayPanel(null);
+    setContextMenu(null);
+    setToast(`Running ${command}.`);
   };
 
   const patchWindow = (id: AppId, patch: Partial<WindowState>) =>
@@ -343,7 +367,12 @@ export default function Desktop() {
   };
 
   const filteredApps = PUBLIC_APPS.filter((id) =>
-    `${APPS[id].title} ${APPS[id].description}`.toLowerCase().includes(launcherQuery.toLowerCase()),
+    `${APPS[id].title} ${APPS[id].description} ${id} ${
+      id === "terminal" ? "command cmd python console" : ""
+    }`.toLowerCase().includes(launcherQuery.toLowerCase()),
+  );
+  const filteredFiles = FILES.filter((file) =>
+    `${file.name} ${file.description}`.toLowerCase().includes(launcherQuery.toLowerCase()),
   );
   const focusedApp = (Object.keys(APPS) as AppId[])
     .filter((id) => windows[id].open && !windows[id].minimized)
@@ -394,9 +423,9 @@ export default function Desktop() {
           setContextMenu({
             x: Math.min(event.clientX, window.innerWidth - 220),
             y: Math.min(event.clientY, window.innerHeight - 260),
+            target: "desktop",
           });
           setStartOpen(false);
-          setLauncherOpen(false);
           setTrayPanel(null);
         }}
         onPointerDown={(event) => {
@@ -407,60 +436,43 @@ export default function Desktop() {
         <div className="wallpaper-orb wallpaper-orb-two" aria-hidden="true" />
 
         <nav key={desktopLayoutVersion} className="desktop-icons" aria-label="Desktop files and folders">
-          {FILES.filter((file) => file.name.endsWith(".py") || file.name === "README.md").map((file) => (
+          {FILES.filter((file) => file.name.endsWith(".py")).map((file) => (
             <MovableDesktopItem key={file.name}>
-              <a className="desktop-icon" href={file.href} download>
+              <button
+                className="desktop-icon"
+                onClick={() => runInTerminal(`python ${file.name}`)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setContextMenu({
+                    x: Math.min(event.clientX, window.innerWidth - 220),
+                    y: Math.min(event.clientY, window.innerHeight - 190),
+                    target: "python",
+                    fileName: file.name,
+                  });
+                }}
+              >
                 <DesktopArtifact kind="file" glyph={file.glyph} />
                 <span>{file.name}</span>
-              </a>
+              </button>
             </MovableDesktopItem>
           ))}
           <MovableDesktopItem>
-            <a className="desktop-icon" href={DOWNLOAD_ARCHIVE} download>
-              <DesktopArtifact kind="file" glyph="ZIP" />
-              <span>interview-files.zip</span>
-            </a>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("about")}>
-              <DesktopArtifact kind="folder" glyph="RW" />
-              <span>About me</span>
-            </button>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <a className="desktop-icon" href="https://ryanw.eu/" target="_blank" rel="noreferrer">
-              <DesktopArtifact kind="file" glyph="HTML" />
-              <span>https://ryanw.eu</span>
-            </a>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("router")}>
-              <DesktopArtifact kind="folder" glyph="SLA" />
-              <span>Support Workbench</span>
-            </button>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("files")}>
-              <DesktopArtifact kind="folder" glyph="DOC" />
-              <span>Documentation</span>
-            </button>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("flash")}>
-              <DesktopArtifact kind="folder" glyph="SWF" />
-              <span>Flash Files</span>
-            </button>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("games")}>
-              <DesktopArtifact kind="folder" glyph="GAME" />
-              <span>Games</span>
-            </button>
-          </MovableDesktopItem>
-          <MovableDesktopItem>
-            <button className="desktop-icon" onClick={() => openApp("utilities")}>
-              <DesktopArtifact kind="folder" glyph="UTIL" />
-              <span>Utilities</span>
+            <button
+              className="desktop-icon"
+              onClick={() => openApp("files")}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setContextMenu({
+                  x: Math.min(event.clientX, window.innerWidth - 220),
+                  y: Math.min(event.clientY, window.innerHeight - 190),
+                  target: "public",
+                });
+              }}
+            >
+              <DesktopArtifact kind="folder" glyph="PUB" />
+              <span>Public</span>
             </button>
           </MovableDesktopItem>
         </nav>
@@ -516,8 +528,15 @@ export default function Desktop() {
                 />
               )}
               {id === "tools" && <ToolsApp />}
-              {id === "files" && <FilesApp notify={setToast} />}
-              {id === "terminal" && <TerminalApp openApp={openApp} />}
+              {id === "files" && <FilesApp notify={setToast} openApp={openApp} runInTerminal={runInTerminal} />}
+              {id === "terminal" && (
+                <TerminalApp
+                  openApp={openApp}
+                  request={terminalRequest}
+                  windows={windows}
+                  patchWindow={patchWindow}
+                />
+              )}
               {id === "about" && <WebsiteFolderApp openApp={openApp} />}
               {id === "work" && <WorkApp />}
               {id === "notes" && <DecisionMarkdownApp />}
@@ -533,14 +552,37 @@ export default function Desktop() {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >
-            <button onClick={() => openApp("router")}>
-              <TaskbarIcon id="router" />
-              <span><strong>Open Support Workbench</strong><small>Route and reply to an issue</small></span>
-            </button>
-            <button onClick={() => openApp("terminal")}>
-              <TaskbarIcon id="terminal" />
-              <span><strong>Open Terminal</strong><small>Run the local CLI mirror</small></span>
-            </button>
+            {contextMenu.target === "python" && contextMenu.fileName ? (
+              <>
+                <button onClick={() => runInTerminal(`python ${contextMenu.fileName}`)}>
+                  <TaskbarIcon id="terminal" />
+                  <span><strong>Run in Command Prompt</strong><small>{contextMenu.fileName}</small></span>
+                </button>
+                <a className="context-menu-link" href={`/downloads/${contextMenu.fileName}`} download>
+                  <DesktopArtifact kind="file" glyph="PY" />
+                  <span><strong>Download file</strong><small>Save the exact Python source</small></span>
+                </a>
+              </>
+            ) : (
+              <>
+                <button onClick={() => openApp("files")}>
+                  <TaskbarIcon id="files" />
+                  <span><strong>Open Public</strong><small>Apps, source, README, and downloads</small></span>
+                </button>
+                <button onClick={() => openApp("terminal")}>
+                  <TaskbarIcon id="terminal" />
+                  <span><strong>Open Command Prompt</strong><small>Run the shipped Python files</small></span>
+                </button>
+              </>
+            )}
+            {contextMenu.target === "public" && (
+              <a className="context-menu-link" href={DOWNLOAD_ARCHIVE} download>
+                <DesktopArtifact kind="file" glyph="ZIP" />
+                <span><strong>Download project ZIP</strong><small>Source, tests, docs, and attributions</small></span>
+              </a>
+            )}
+            {contextMenu.target === "desktop" && (
+              <>
             <button
               onClick={() => {
                 setWallpaper((current) => current === "sunset" ? "teal" : "sunset");
@@ -555,6 +597,8 @@ export default function Desktop() {
               <span className="context-reset" aria-hidden="true">↺</span>
               <span><strong>Reset desktop layout</strong><small>Restore the interview opening</small></span>
             </button>
+              </>
+            )}
           </nav>
         )}
       </section>
@@ -568,8 +612,18 @@ export default function Desktop() {
               <span>Support workstation</span>
             </div>
           </div>
+          <label className="start-search" htmlFor="start-search">
+            <span className="search-icon" aria-hidden="true" />
+            <input
+              ref={launcherRef}
+              id="start-search"
+              value={launcherQuery}
+              onChange={(event) => setLauncherQuery(event.target.value)}
+              placeholder="Search apps, files, and commands"
+            />
+          </label>
           <div className="start-grid">
-            {PUBLIC_APPS.map((id) => (
+            {filteredApps.map((id) => (
               <button key={id} onClick={() => openApp(id)}>
                 <AppGlyph glyph={APPS[id].glyph} small />
                 <span>{APPS[id].title}</span>
@@ -585,42 +639,20 @@ export default function Desktop() {
               </span>
             </header>
             <div>
-              {FILES.slice(0, 3).map((file) => (
-                <a href={file.href} download key={file.name}>
+              {filteredFiles.slice(0, 3).map((file) => (
+                <button key={file.name} onClick={() => file.name.endsWith(".py") ? runInTerminal(`python ${file.name}`) : openApp("files")}>
                   <DesktopArtifact kind="file" glyph={file.glyph} />
                   <span><strong>{file.name}</strong><small>{file.description}</small></span>
-                </a>
+                </button>
               ))}
             </div>
           </section>
+          {!filteredApps.length && !filteredFiles.length && (
+            <p className="start-empty">No matching app or file.</p>
+          )}
           <div className="start-footer">
             <span>Local demo · no customer messages sent</span>
             <button onClick={resetDesktop}>Reset layout</button>
-          </div>
-        </section>
-      )}
-
-      {launcherOpen && (
-        <section className="launcher glass-panel" aria-label="Application launcher">
-          <label htmlFor="launcher-search">Find an app</label>
-          <input
-            ref={launcherRef}
-            id="launcher-search"
-            value={launcherQuery}
-            onChange={(event) => setLauncherQuery(event.target.value)}
-            placeholder="Search apps and tools"
-          />
-          <div className="launcher-results">
-            {filteredApps.map((id) => (
-              <button key={id} onClick={() => openApp(id)}>
-                <AppGlyph glyph={APPS[id].glyph} small />
-                <span>
-                  <strong>{APPS[id].title}</strong>
-                  <small>{APPS[id].description}</small>
-                </span>
-              </button>
-            ))}
-            {!filteredApps.length && <p>No matching app. Press Escape to close.</p>}
           </div>
         </section>
       )}
@@ -632,27 +664,27 @@ export default function Desktop() {
           aria-expanded={startOpen}
           onClick={() => {
             setStartOpen((current) => !current);
-            setLauncherOpen(false);
             setTrayPanel(null);
           }}
         >
           <span className="launcher-grid-icon" aria-hidden="true">
             {Array.from({ length: 9 }, (_, index) => <i key={index} />)}
           </span>
+          <span className="taskbar-button-label">Start</span>
           <span className="taskbar-tooltip">Start <kbd>Shift Esc</kbd></span>
         </button>
         <span className="taskbar-divider" aria-hidden="true" />
         <button
-          className="search-button"
+          className={`search-button ${startOpen ? "active" : ""}`}
           aria-label="Find an app"
           onClick={() => {
-            setLauncherOpen(true);
-            setStartOpen(false);
+            setStartOpen(true);
             setTrayPanel(null);
             window.setTimeout(() => launcherRef.current?.focus(), 20);
           }}
         >
           <span className="search-icon" aria-hidden="true" />
+          <span className="taskbar-search-label">Type here to search</span>
           <span className="taskbar-tooltip">Find an app <kbd>Ctrl K</kbd></span>
         </button>
         <div className="taskbar-apps" aria-label="Open applications">
@@ -678,6 +710,7 @@ export default function Desktop() {
                 }}
               >
                 <TaskbarIcon id={id} />
+                <span className="taskbar-app-label">{APPS[id].title}</span>
                 <span className="taskbar-tooltip">
                   <strong>{APPS[id].title}</strong>
                   <small>{windows[id].open ? windows[id].minimized ? "Minimised" : focusedApp === id ? "In focus" : "Open" : "Pinned"}</small>
@@ -693,7 +726,6 @@ export default function Desktop() {
             onClick={() => {
               setTrayPanel((current) => current === "system" ? null : "system");
               setStartOpen(false);
-              setLauncherOpen(false);
             }}
           >
             <span className="network-icon" aria-hidden="true"><i /><i /><i /></span>
@@ -708,7 +740,6 @@ export default function Desktop() {
             onClick={() => {
               setTrayPanel((current) => current === "calendar" ? null : "calendar");
               setStartOpen(false);
-              setLauncherOpen(false);
             }}
           >
             <strong>{now?.toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" }) ?? "--:--"}</strong>
@@ -766,7 +797,7 @@ function AppGlyph({ glyph, small = false, tone = "app" }: { glyph: string; small
 
 function TaskbarIcon({ id }: { id: AppId }) {
   if (id === "files") return <span className="taskbar-icon taskbar-folder-icon" aria-hidden="true" />;
-  if (id === "router") return <span className="taskbar-icon taskbar-router-icon" aria-hidden="true"><i /><i /></span>;
+  if (id === "router") return <span className="taskbar-icon taskbar-router-icon" aria-hidden="true">Py</span>;
   if (id === "notes") return <span className="taskbar-icon taskbar-document-icon" aria-hidden="true"><i /><i /><i /></span>;
   if (id === "tools") return <span className="taskbar-icon taskbar-tools-icon" aria-hidden="true">✦</span>;
   if (id === "terminal") return <span className="taskbar-icon taskbar-terminal-icon" aria-hidden="true">&gt;_</span>;
@@ -788,7 +819,7 @@ function MovableDesktopItem({ children }: { children: ReactNode }) {
 
   const beginMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || window.innerWidth < 760) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    dragged.current = false;
     const origin = { pointerX: event.clientX, pointerY: event.clientY, ...offset };
     const onMove = (moveEvent: PointerEvent) => {
       const x = origin.x + moveEvent.clientX - origin.pointerX;
@@ -799,9 +830,11 @@ function MovableDesktopItem({ children }: { children: ReactNode }) {
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   return (
@@ -1039,8 +1072,8 @@ function SupportFolderApp({
   if (routerOpen) {
     return (
       <div className="website-folder-view">
-        <nav className="folder-toolbar" aria-label="Support Workbench breadcrumb">
-          <button onClick={() => setRouterOpen(false)}>← Support Workbench</button>
+        <nav className="folder-toolbar" aria-label="Support Router breadcrumb">
+          <button onClick={() => setRouterOpen(false)}>← Support Router</button>
           <span>/ Support Router</span>
         </nav>
         <RouterApp onRouted={onRouted} onDraftSaved={onDraftSaved} notify={notify} />
@@ -1053,7 +1086,7 @@ function SupportFolderApp({
         <button disabled>←</button>
         <button disabled>→</button>
         <button disabled>↑</button>
-        <span className="folder-path">Desktop / Support Workbench</span>
+        <span className="folder-path">Public / Support Router</span>
       </header>
       <div className="folder-banner support-folder-banner">
         <span className="profile-mark">SLA</span>
@@ -1143,7 +1176,15 @@ function ToolsApp() {
   );
 }
 
-function FilesApp({ notify }: { notify: (message: string) => void }) {
+function FilesApp({
+  notify,
+  openApp,
+  runInTerminal,
+}: {
+  notify: (message: string) => void;
+  openApp: (id: AppId) => void;
+  runInTerminal: (command: string) => void;
+}) {
   const [activeFile, setActiveFile] = useState<(typeof FILES)[number] | null>(null);
   const [preview, setPreview] = useState("");
 
@@ -1164,18 +1205,38 @@ function FilesApp({ notify }: { notify: (message: string) => void }) {
     <div className="file-explorer">
       <aside>
         <span className="app-eyebrow">Places</span>
-        <button className="active">Interview files</button>
+        <button className="active">Public</button>
         <button onClick={() => window.open("https://github.com/ryan-winkler", "_blank")}>GitHub ↗</button>
         <button onClick={() => window.open("https://ryanw.eu/", "_blank")}>ryanw.eu ↗</button>
       </aside>
       <div className="file-main">
         <header className="file-main-toolbar">
           <span>
-            <strong>Interview files</strong>
-            <small>Exact source, tests, manual, and decision notes</small>
+            <strong>Public</strong>
+            <small>Apps, exact source, tests, manual, and decision notes</small>
           </span>
           <a className="primary-button" href={DOWNLOAD_ARCHIVE} download>Download all (.zip)</a>
         </header>
+        <div className="public-app-grid" aria-label="Public applications">
+          {PUBLIC_APPS.filter((id) => id !== "files").map((id) => (
+            <button key={id} onClick={() => openApp(id)}>
+              <TaskbarIcon id={id} />
+              <span>{APPS[id].title}</span>
+            </button>
+          ))}
+          <button onClick={() => openApp("work")}>
+            <TaskbarIcon id="work" />
+            <span>Selected Work</span>
+          </button>
+          <button onClick={() => openApp("notes")}>
+            <TaskbarIcon id="notes" />
+            <span>PROCESS.md</span>
+          </button>
+          <a href="https://ryanw.eu/" target="_blank" rel="noreferrer">
+            <DesktopArtifact kind="file" glyph="HTML" />
+            <span>ryanw.eu</span>
+          </a>
+        </div>
         <div className="file-list">
           {FILES.map((file) => (
             <button className={activeFile?.name === file.name ? "active" : ""} key={file.name} onClick={() => previewFile(file)}>
@@ -1188,7 +1249,12 @@ function FilesApp({ notify }: { notify: (message: string) => void }) {
           <section className="file-preview">
             <header>
               <strong>{activeFile.name}</strong>
-              <a className="primary-button" href={activeFile.href} download>Download</a>
+              <span>
+                {activeFile.name.endsWith(".py") && (
+                  <button className="primary-button" onClick={() => runInTerminal(`python ${activeFile.name}`)}>Run</button>
+                )}
+                <a className="primary-button" href={activeFile.href} download>Download</a>
+              </span>
             </header>
             <pre>{preview}</pre>
           </section>
@@ -1204,14 +1270,24 @@ function FilesApp({ notify }: { notify: (message: string) => void }) {
   );
 }
 
-function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
+function TerminalApp({
+  openApp,
+  request,
+  windows,
+  patchWindow,
+}: {
+  openApp: (id: AppId) => void;
+  request: TerminalRequest | null;
+  windows: Record<AppId, WindowState>;
+  patchWindow: (id: AppId, patch: Partial<WindowState>) => void;
+}) {
   const welcome = [
     "Ryan Support Workstation — real browser Python terminal",
     "The first Python command loads CPython and the shipped dependencies.",
     "Try: python3 support_agent_router.py --help",
     "Try: python test_pure.py",
-    "Agents SDK calls use the real script and require OPENAI_API_KEY when run locally.",
-    "No key is requested or stored by this public website.",
+    "Agents SDK calls use the real script. A key can be held in this worker session only.",
+    "For the strongest protection, run locally with OPENAI_API_KEY instead.",
     "",
     'Type "help" for commands.',
   ];
@@ -1219,48 +1295,92 @@ function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
   const [command, setCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState("Python runtime loads on demand");
+  const [workingDirectory, setWorkingDirectory] = useState("/Users/ryan/Desktop");
+  const [keyStatus, setKeyStatus] = useState("No session key loaded");
+  const [terminalTone, setTerminalTone] = useState("blue");
+  const [historyCursor, setHistoryCursor] = useState(-1);
   const workerRef = useRef<Worker | null>(null);
   const pendingRef = useRef<((result: PythonRunResult) => void) | null>(null);
+  const apiKeyInputRef = useRef<HTMLInputElement>(null);
+  const commandHistoryRef = useRef<string[]>([]);
+  const lastRequestRef = useRef(0);
+  const executeRef = useRef<(input: string) => Promise<void>>(async () => undefined);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
 
+  const ensureWorker = () => {
+    let worker = workerRef.current;
+    if (!worker) {
+      worker = new Worker("/python-worker.mjs", { type: "module" });
+      workerRef.current = worker;
+      worker.onmessage = ({ data }: MessageEvent<{ type: string; message?: string } & PythonRunResult>) => {
+        if (data.type === "progress") {
+          setRuntimeStatus(data.message ?? "Working…");
+          return;
+        }
+        if (data.type === "key-status") {
+          setKeyStatus(data.message ?? "Session key updated");
+          return;
+        }
+        pendingRef.current?.(data);
+        pendingRef.current = null;
+      };
+      worker.onerror = () => {
+        pendingRef.current?.({
+          stdout: "",
+          stderr: "The browser Python runtime could not start. Download the ZIP and run the command locally.",
+          exitCode: 1,
+        });
+        pendingRef.current = null;
+        workerRef.current?.terminate();
+        workerRef.current = null;
+      };
+    }
+    return worker;
+  };
+
   const runPython = (input: string) =>
     new Promise<PythonRunResult>((resolve) => {
-      let worker = workerRef.current;
-      if (!worker) {
-        worker = new Worker("/python-worker.mjs", { type: "module" });
-        workerRef.current = worker;
-        worker.onmessage = ({ data }: MessageEvent<{ type: string; message?: string } & PythonRunResult>) => {
-          if (data.type === "progress") {
-            setRuntimeStatus(data.message ?? "Working…");
-            return;
-          }
-          pendingRef.current?.(data);
-          pendingRef.current = null;
-        };
-        worker.onerror = () => {
-          pendingRef.current?.({
-            stdout: "",
-            stderr: "The browser Python runtime could not start. Download the ZIP and run the command locally.",
-            exitCode: 1,
-          });
-          pendingRef.current = null;
-          workerRef.current?.terminate();
-          workerRef.current = null;
-        };
-      }
+      const worker = ensureWorker();
       pendingRef.current = resolve;
-      worker.postMessage({ command: input });
+      worker.postMessage({ type: "run", command: input });
     });
+
+  const storeSessionKey = () => {
+    const input = apiKeyInputRef.current;
+    const apiKey = input?.value.trim() ?? "";
+    if (!/^sk-[A-Za-z0-9_-]{16,}$/.test(apiKey) || apiKey.length > 512) {
+      setKeyStatus("Enter a valid OpenAI key beginning with sk-");
+      return;
+    }
+    ensureWorker().postMessage({ type: "set-key", apiKey });
+    if (input) input.value = "";
+    setKeyStatus("Session key loaded in the isolated worker");
+  };
+
+  const forgetSessionKey = () => {
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    pendingRef.current = null;
+    if (apiKeyInputRef.current) apiKeyInputRef.current.value = "";
+    setRuntimeStatus("Python runtime loads on demand");
+    setKeyStatus("Session key forgotten; worker memory cleared");
+  };
 
   const execute = async (rawInput: string) => {
     const input = rawInput.trim();
     if (!input || running) return;
+    const displayInput = input.replace(/(--api-key(?:=|\s+))\S+/i, "$1[redacted]");
     setCommand("");
-    setLines((current) => [...current, `rw@support:~$ ${input}`]);
-    const [name, ...args] = input.split(/\s+/);
+    commandHistoryRef.current = [...commandHistoryRef.current, displayInput].slice(-50);
+    setHistoryCursor(-1);
+    setLines((current) => [...current, `rw@support:${workingDirectory}$ ${displayInput}`]);
+    const [rawName, ...args] = input.split(/\s+/);
+    const name = rawName.toLowerCase();
     let output: string[] = [];
-    if (name === "python" || name === "python3") {
+    if (/--api-key(?:=|\s+)/i.test(input)) {
+      output = ["For safety, enter the key in the session-only field above instead of command history."];
+    } else if (name === "python" || name === "python3") {
       setRunning(true);
       setRuntimeStatus("Starting Python…");
       const result = await runPython(input);
@@ -1269,24 +1389,68 @@ function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
         ...result.stderr.replace(/\s+$/, "").split("\n").filter(Boolean),
         `[exit ${result.exitCode}]`,
       ];
-      if (/OPENAI_API_KEY|api key/i.test(result.stderr)) {
-        output.push("Public-site boundary: no API key is stored here. Download the ZIP to run Agents SDK calls locally.");
+      if (/OPENAI_API_KEY|api key/i.test(result.stderr) && keyStatus.startsWith("No session")) {
+        output.push("Load a session-only key above, or run locally with OPENAI_API_KEY.");
       }
       setRunning(false);
     } else if (name === "help") {
       output = [
         "python3 support_agent_router.py --help",
+        'python3 support_agent_router.py "429 during a burst" --give-reply auto',
         "python test_pure.py",
         "python test_support_agent_router.py",
-        "help · ls · cat <file> · whoami · status · route <issue> · open <app> · clear",
+        "",
+        "Files: dir/ls · tree · pwd · cd <Desktop|Public> · cat/type <file> · find <text> · download <file>",
+        "System: help · clear/cls · date · time · history · whoami · hostname · ver · neofetch · ipconfig",
+        "Apps: open/start <app> · tasklist · taskkill <app> · manual · license · exit",
+        "Support: route <issue> · status · color <blue|green|amber> · echo <text>",
       ];
-    } else if (name === "ls") output = [...FILES.map((file) => file.name), "support-agent-router-interview.zip"];
+    } else if (name === "ls" || name === "dir") {
+      output = workingDirectory.endsWith("/Public")
+        ? [...FILES.map((file) => file.name), "support-agent-router-interview.zip"]
+        : ["support_agent_router.py", "test_pure.py", "test_support_agent_router.py", "Public/"];
+    } else if (name === "tree") {
+      output = [
+        "Desktop/",
+        "├── support_agent_router.py",
+        "├── test_pure.py",
+        "├── test_support_agent_router.py",
+        "└── Public/  (apps, docs, README, manual, ZIP)",
+      ];
+    } else if (name === "pwd") output = [workingDirectory];
+    else if (name === "cd") {
+      const target = (args[0] ?? "").replace(/\/$/, "").toLowerCase();
+      if (!target || target === "~" || target === "desktop" || target === "..") {
+        setWorkingDirectory("/Users/ryan/Desktop");
+        output = ["/Users/ryan/Desktop"];
+      } else if (target === "public" || target.endsWith("/public")) {
+        setWorkingDirectory("/Users/ryan/Desktop/Public");
+        output = ["/Users/ryan/Desktop/Public"];
+      } else output = ["Directory not found. Available: Desktop, Public"];
+    }
     else if (name === "whoami") output = ["Ryan Winkler — AI Support Engineer (hopefully), Dublin"];
+    else if (name === "hostname") output = ["RYAN-SUPPORT-WORKSTATION"];
+    else if (name === "ver") output = ["Ryan Support Workstation 1.0 · browser runtime"];
+    else if (name === "date") output = [new Date().toLocaleDateString("en-IE", { dateStyle: "full" })];
+    else if (name === "time") output = [new Date().toLocaleTimeString("en-IE")];
+    else if (name === "history") output = commandHistoryRef.current.map((item, index) => `${index + 1}  ${item}`);
+    else if (name === "neofetch") output = [
+      "Ryan Support Workstation",
+      `Browser: ${navigator.userAgent.split(" ").slice(-2).join(" ")}`,
+      `Viewport: ${window.innerWidth}x${window.innerHeight}`,
+      `Python: ${runtimeStatus}`,
+      "Role: AI Support Engineer (hopefully)",
+    ];
+    else if (name === "ipconfig") output = [
+      `Connection: ${navigator.onLine ? "online" : "offline"}`,
+      `Origin: ${window.location.origin}`,
+      "Public IP is not inspected by this local workstation.",
+    ];
     else if (name === "status") output = [`${runtimeStatus} · sending disabled · human review required`];
     else if (name === "route") {
       const issue = args.join(" ");
       output = issue ? [`${routeIssue(issue).route}: ${routeIssue(issue).action}`] : ["usage: route <customer issue>"];
-    } else if (name === "cat") {
+    } else if (name === "cat" || name === "type") {
       const file = FILES.find(({ name: filename }) => filename === args[0]);
       if (!file) output = ["Choose a text file shown by ls."];
       else {
@@ -1298,18 +1462,79 @@ function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
           output = [`Could not read ${file.name}.`];
         }
       }
-    } else if (name === "open") {
+    } else if (name === "find") {
+      const query = args.join(" ").toLowerCase();
+      output = query
+        ? [
+            ...FILES.filter((file) => file.name.toLowerCase().includes(query)).map((file) => file.name),
+            ...PUBLIC_APPS.filter((id) => APPS[id].title.toLowerCase().includes(query)).map((id) => `${id} — ${APPS[id].title}`),
+          ]
+        : ["usage: find <text>"];
+      if (query && !output.length) output = ["No matches."];
+    } else if (name === "open" || name === "start") {
       const target = args[0] as AppId;
       if (target in APPS) {
         openApp(target);
         output = [`Opened ${APPS[target].title}`];
-      } else output = ["Unknown app. Try: router, tools, files, games, doom, flash, about"];
-    } else if (name === "clear") {
+      } else output = ["Unknown app. Try: router, terminal, files, tools, games, doom, flash, about"];
+    } else if (name === "tasklist") {
+      output = (Object.keys(windows) as AppId[])
+        .filter((id) => windows[id].open)
+        .map((id) => `${id.padEnd(12)} ${windows[id].minimized ? "minimised" : "running"}`);
+    } else if (name === "taskkill") {
+      const target = args[0] as AppId;
+      if (target in windows && target !== "terminal") {
+        patchWindow(target, { open: false });
+        output = [`Closed ${APPS[target].title}`];
+      } else output = ["usage: taskkill <running app>; use exit to close this terminal"];
+    } else if (name === "download") {
+      const file = FILES.find(({ name: filename }) => filename === args[0]);
+      if (file) {
+        const anchor = document.createElement("a");
+        anchor.href = file.href;
+        anchor.download = file.name;
+        anchor.click();
+        output = [`Downloading ${file.name}`];
+      } else if (args[0] === "all" || args[0]?.endsWith(".zip")) {
+        const anchor = document.createElement("a");
+        anchor.href = DOWNLOAD_ARCHIVE;
+        anchor.download = "support-agent-router-interview.zip";
+        anchor.click();
+        output = ["Downloading project ZIP"];
+      } else output = ["usage: download <file|all>"];
+    } else if (name === "manual") {
+      openApp("doom");
+      output = ["Opened DOOM. Select “Open local manual” below the game."];
+    } else if (name === "license") {
+      openApp("files");
+      output = ["Opened Public. Select ATTRIBUTIONS.md for project licences and credits."];
+    } else if (name === "echo") output = [args.join(" ")];
+    else if (name === "color") {
+      const tone = args[0]?.toLowerCase();
+      if (["blue", "green", "amber"].includes(tone)) {
+        setTerminalTone(tone);
+        output = [`Terminal colour set to ${tone}.`];
+      } else output = ["usage: color <blue|green|amber>"];
+    } else if (name === "clear" || name === "cls") {
       setLines([]);
       return;
+    } else if (name === "exit") {
+      patchWindow("terminal", { minimized: true });
+      output = ["Terminal minimised."];
+    } else if (name === "shutdown") {
+      output = ["Shutdown is disabled in the browser workstation. Use exit to minimise Command Prompt."];
     } else output = [`Command not found: ${name}. Type "help".`];
     setLines((current) => [...current, ...output]);
   };
+
+  useEffect(() => {
+    executeRef.current = execute;
+  });
+  useEffect(() => {
+    if (!request || request.id === lastRequestRef.current) return;
+    lastRequestRef.current = request.id;
+    void executeRef.current(request.command);
+  }, [request]);
 
   const run = (event: FormEvent) => {
     event.preventDefault();
@@ -1317,15 +1542,32 @@ function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
   };
 
   return (
-    <div className="terminal-app" onClick={(event) => (event.currentTarget.querySelector("input") as HTMLInputElement)?.focus()}>
+    <div className={`terminal-app terminal-${terminalTone}`}>
       <header className="terminal-toolbar">
         <span className={running ? "working" : ""}>{runtimeStatus}</span>
         <div>
           <button onClick={() => void execute("python3 support_agent_router.py --help")} disabled={running}>CLI help</button>
+          <button onClick={() => void execute('python3 support_agent_router.py "429 during a burst" --give-reply auto')} disabled={running}>Run sample</button>
           <button onClick={() => void execute("python test_pure.py")} disabled={running}>Pure tests</button>
           <button onClick={() => void execute("python test_support_agent_router.py")} disabled={running}>SDK tests</button>
         </div>
       </header>
+      <details className="terminal-key-panel">
+        <summary>OpenAI API key · session only</summary>
+        <div>
+          <input
+            ref={apiKeyInputRef}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="OpenAI API key held in worker memory for this tab only"
+            placeholder="sk-…"
+          />
+          <button type="button" onClick={storeSessionKey}>Use for session</button>
+          <button type="button" onClick={forgetSessionKey}>Forget key</button>
+        </div>
+        <p>{keyStatus}. Never saved to local storage, terminal history, logs, or source. Local OPENAI_API_KEY is safer.</p>
+      </details>
       <div className="terminal-output" aria-live="polite">
         {lines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}
       </div>
@@ -1335,6 +1577,17 @@ function TerminalApp({ openApp }: { openApp: (id: AppId) => void }) {
           id="terminal-command"
           value={command}
           onChange={(event) => setCommand(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+            event.preventDefault();
+            const history = commandHistoryRef.current;
+            if (!history.length) return;
+            const next = event.key === "ArrowUp"
+              ? Math.min(history.length - 1, historyCursor + 1)
+              : Math.max(-1, historyCursor - 1);
+            setHistoryCursor(next);
+            setCommand(next < 0 ? "" : history[history.length - 1 - next]);
+          }}
           autoComplete="off"
           disabled={running}
           aria-label="Terminal command"
@@ -2170,7 +2423,7 @@ function DecisionMarkdownApp() {
 
       <h2>Desktop decisions</h2>
       <p>
-        Four deliverable files stay visible. Portfolio, support tools, and documentation are grouped into folders. The three open windows show the interview story at a glance: a human break, the working CLI, and the rationale.
+        The three Python files and one Public folder stay visible. Portfolio, tools, games, and documentation live inside Public. The three open windows show the interview story at a glance: a human break, the working CLI, and the rationale.
       </p>
 
       <h2>Automatic customer context</h2>

@@ -21,11 +21,11 @@ test("renders the finished support workstation", async () => {
   const html = await response.text();
   assert.match(html, /<title>Ryan Winkler — Support Workstation<\/title>/i);
   assert.match(html, /Ryan Winkler/);
-  assert.match(html, /Support Workbench/);
+  assert.match(html, /Support Router/);
   assert.match(html, /DOOM running in js-dos/);
-  assert.match(html, /support_agent_router\.py — CLI/);
+  assert.match(html, /Command Prompt — support_agent_router\.py/);
   assert.match(html, /PROCESS\.md/);
-  assert.match(html, /Flash Files/);
+  assert.match(html, />Public</);
   assert.match(html, /support_agent_router\.py/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });

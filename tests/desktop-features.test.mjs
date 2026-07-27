@@ -27,9 +27,13 @@ test("uses the real Python boundary and preserves the public-site safety gate", 
   ]);
   assert.match(page, /new Worker\("\/python-worker\.mjs"/);
   assert.match(page, /AI Support Engineer \(hopefully\)/);
-  assert.match(page, /no API key is stored here/i);
+  assert.match(page, /session-only key/i);
+  assert.match(page, /Never saved to local storage, terminal history, logs, or source/i);
+  assert.match(page, /Use for session/);
   assert.match(worker, /runpy\.run_path/);
   assert.match(worker, /micropip\.install\("openai-agents", reinstall=True\)/);
+  assert.match(worker, /sessionApiKey/);
+  assert.match(worker, /\[secret redacted\]/);
 });
 
 test("exposes the requested desktop interactions and direct attributions", async () => {
@@ -39,7 +43,13 @@ test("exposes the requested desktop interactions and direct attributions", async
     readFile(new URL("public/downloads/ATTRIBUTIONS.md", root), "utf8"),
   ]);
   assert.match(page, /MovableDesktopItem/);
+  const movable = page.slice(page.indexOf("function MovableDesktopItem"), page.indexOf("function AppWindow"));
+  assert.doesNotMatch(movable, /setPointerCapture/);
+  assert.match(movable, /pointercancel/);
   assert.match(page, /onDrag=\{\(event\) => beginDrag/);
+  assert.match(page, /<span>Public<\/span>/);
+  assert.match(page, /Run in Command Prompt/);
+  assert.match(page, /Search apps, files, and commands/);
   assert.match(page, /About me/);
   assert.match(page, /https:\/\/ryanw\.eu/);
   assert.match(page, /Open local manual/);

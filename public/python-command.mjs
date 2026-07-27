@@ -38,12 +38,18 @@ export function tokenizeCommand(input) {
 }
 
 export function parsePythonCommand(input) {
+  if (input.length > 12_000) {
+    throw new Error("Command cannot exceed 12,000 characters.");
+  }
   const [executable, file, ...args] = tokenizeCommand(input);
   if (!["python", "python3"].includes(executable)) {
     throw new Error("Start Python commands with python or python3.");
   }
   if (!PYTHON_FILES.has(file)) {
     throw new Error(`Choose a shipped Python file: ${[...PYTHON_FILES].join(", ")}.`);
+  }
+  if (args.some((argument) => argument === "--api-key" || argument.startsWith("--api-key="))) {
+    throw new Error("Use the session-only key field instead of command arguments.");
   }
   return { file, args };
 }

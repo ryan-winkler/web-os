@@ -15,6 +15,19 @@ pip install openai-agents
 export OPENAI_API_KEY="your-key"
 ```
 
+`OPENAI_API_KEY` is the safer option. `--api-key` is also available for a
+single process, but command-line arguments can appear in shell history and
+process listings:
+
+```bash
+python support_agent_router.py \
+  --api-key "sk-…" \
+  "We receive 429 errors when traffic spikes."
+```
+
+The key is configured in memory with Agents SDK tracing disabled. It is never
+written to the local support log.
+
 ## Run
 
 Interactive mode:
@@ -51,8 +64,8 @@ python test_pure.py
 ```
 
 The pure suite exercises parsing, deterministic routing helpers, logging
-formatting, and printable output without network access. The SDK boundary has
-separate mocked tests:
+formatting, security boundaries, and printable output without network access.
+It currently runs 18 tests. The SDK boundary has separate mocked tests:
 
 ```bash
 python test_support_agent_router.py
@@ -63,9 +76,12 @@ python test_support_agent_router.py
 The accompanying website runs these exact Python files in CPython compiled to
 WebAssembly with Pyodide. The first Python command loads the runtime and the
 OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
-`python test_support_agent_router.py`, and CLI help run in the browser. API
-requests still require `OPENAI_API_KEY` and are intentionally run locally
-rather than asking for a secret on a public website.
+`python test_support_agent_router.py`, and CLI help run in the browser. The
+terminal can hold an API key inside its isolated Web Worker for the current tab
+only and can explicitly discard that worker. It does not place the key in
+React state, terminal history, local storage, logs, or downloads. A public
+browser app cannot offer the same protection as a local environment variable,
+so local `OPENAI_API_KEY` remains the recommended path.
 
 The desktop also includes a local DOOM manual, Start menu, games, editor,
 calculator, Code Lab, image viewer, local media player, permission-gated camera,
@@ -80,6 +96,13 @@ local files.
 - Computation: route validation and workflow decisions stay deterministic.
 - Formatting: customer replies, CLI output, and logs are rendered separately.
 - Delivery: no email or ticketing API is connected in this interview build.
+
+Customer messages are capped at 10,000 characters. Every agent receives the
+payload inside an `untrusted_customer_content` envelope, has no tools or
+handoffs, is limited to one model turn, and has a capped output size. Key-like
+values are removed from customer input before model invocation and from model
+text before display. These controls prevent customer text from gaining network
+or send authority; prepared replies still require human review.
 
 Operational logs default to a local text file and avoid customer PII where
 possible. The code comments identify the narrow integration point for an API

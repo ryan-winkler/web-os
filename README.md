@@ -6,7 +6,7 @@ An original browser desktop for Ryan's support-agent interview project.
 
 - a polished windowed desktop with Start, taskbar, app finder, files, and local console
 - an opening three-window composition with DOOM, the running CLI mirror, and `PROCESS.md`
-- deterministic multi-issue triage and specialist routing with no browser-side API key
+- deterministic multi-issue triage and specialist routing through the exact Python files
 - editable customer-reply preparation with revise, save, and fail-closed send controls
 - incident timer, request-ID extraction, retry backoff, and HTTP status guidance
 - Ryan's profile, selected work, public field notes, and exact interview downloads
@@ -14,9 +14,10 @@ An original browser desktop for Ryan's support-agent interview project.
 - an in-product review against Nielsen's ten usability heuristics
 
 The website is an original implementation. It does not copy code from the
-web-desktop references used for visual research. The browser demo does not
-execute Python, call an LLM, or send a customer message. Download the CLI to
-run the OpenAI Agents SDK flow. Drafts remain subject to human review, and Send
+web-desktop references used for visual research. Its Command Prompt runs the
+shipped files in CPython through Pyodide. A key may be held in isolated worker
+memory for the current tab and explicitly discarded; local `OPENAI_API_KEY`
+remains the recommended path. Drafts remain subject to human review, and Send
 Reply is unavailable until an authenticated messaging API is connected.
 
 ## Local development

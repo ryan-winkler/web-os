@@ -24,5 +24,13 @@ test("accepts each shipped Python entry point", () => {
 test("rejects non-Python commands and unshipped files", () => {
   assert.throws(() => parsePythonCommand("node support_agent_router.py"), /python or python3/);
   assert.throws(() => parsePythonCommand("python secrets.py"), /Choose a shipped Python file/);
+  assert.throws(
+    () => parsePythonCommand("python support_agent_router.py --api-key sk-proj-abcdefghijklmnop"),
+    /session-only key field/,
+  );
+  assert.throws(
+    () => parsePythonCommand(`python support_agent_router.py "${"x".repeat(12_001)}"`),
+    /12,000/,
+  );
   assert.throws(() => tokenizeCommand('python "unfinished'), /Close the quoted argument/);
 });
