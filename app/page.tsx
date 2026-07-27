@@ -9,6 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  completeTerminalInput,
+  quoteCommandArgument,
+} from "../public/python-command.mjs";
 
 type AppId = "doom" | "games" | "utilities" | "flash" | "router" | "tools" | "files" | "terminal" | "about" | "work" | "notes" | "help";
 type RouteName =
@@ -1310,12 +1314,13 @@ function TerminalApp({
   const welcome = [
     "Ryan Support Workstation — real browser Python terminal",
     "The first Python command loads CPython and the shipped dependencies.",
+    "Run the router with no arguments for browser-native interactive prompts.",
     "Try: python3 support_agent_router.py --help",
     "Try: python test_pure.py",
     "Agents SDK calls use the real script. A key can be held in this worker session only.",
     "For the strongest protection, run locally with OPENAI_API_KEY instead.",
     "",
-    'Type "help" for commands.',
+    'Type "help" for commands. Press Tab to complete commands and options.',
   ];
   const [lines, setLines] = useState(welcome);
   const [command, setCommand] = useState("");
@@ -1325,6 +1330,8 @@ function TerminalApp({
   const [keyStatus, setKeyStatus] = useState("No session key loaded");
   const [terminalTone, setTerminalTone] = useState("blue");
   const [historyCursor, setHistoryCursor] = useState(-1);
+  const [browserPrompt, setBrowserPrompt] = useState<"customer-id" | "issue" | null>(null);
+  const [browserCustomerId, setBrowserCustomerId] = useState("");
   const workerRef = useRef<Worker | null>(null);
   const pendingRef = useRef<((result: PythonRunResult) => void) | null>(null);
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
@@ -1372,6 +1379,25 @@ function TerminalApp({
       worker.postMessage({ type: "run", command: input });
     });
 
+  const executePython = async (input: string) => {
+    setRunning(true);
+    setRuntimeStatus("Starting Python…");
+    try {
+      const result = await runPython(input);
+      const output = [
+        ...result.stdout.replace(/\s+$/, "").split("\n").filter(Boolean),
+        ...result.stderr.replace(/\s+$/, "").split("\n").filter(Boolean),
+        `[exit ${result.exitCode}]`,
+      ];
+      if (/OPENAI_API_KEY|api key/i.test(result.stderr) && keyStatus.startsWith("No session")) {
+        output.push("Load a session-only key above, or run locally with OPENAI_API_KEY.");
+      }
+      return output;
+    } finally {
+      setRunning(false);
+    }
+  };
+
   const storeSessionKey = () => {
     const input = apiKeyInputRef.current;
     const apiKey = input?.value.trim() ?? "";
@@ -1395,7 +1421,47 @@ function TerminalApp({
 
   const execute = async (rawInput: string) => {
     const input = rawInput.trim();
-    if (!input || running) return;
+    if (running) return;
+    if (browserPrompt === "customer-id") {
+      setCommand("");
+      if (input.toLowerCase() === "quit") {
+        setBrowserPrompt(null);
+        setBrowserCustomerId("");
+        setLines((current) => [...current, "Customer ID (optional): [session closed]"]);
+        return;
+      }
+      setBrowserCustomerId(input);
+      setBrowserPrompt("issue");
+      setLines((current) => [
+        ...current,
+        `Customer ID (optional): ${input ? "[provided]" : "[not provided]"}`,
+        "Customer message:",
+      ]);
+      return;
+    }
+    if (browserPrompt === "issue") {
+      setCommand("");
+      if (input.toLowerCase() === "quit") {
+        setBrowserPrompt(null);
+        setBrowserCustomerId("");
+        setLines((current) => [...current, "Customer message: quit", "Interactive router closed."]);
+        return;
+      }
+      if (!input) {
+        setLines((current) => [...current, "Message must contain at least one character.", "Customer message:"]);
+        return;
+      }
+      const customerArgument = browserCustomerId
+        ? ` --customer-id ${quoteCommandArgument(browserCustomerId)}`
+        : "";
+      setLines((current) => [...current, "Customer message: [submitted to the local Python runtime]"]);
+      const output = await executePython(
+        `python3 support_agent_router.py${customerArgument} --give-reply prepared ${quoteCommandArgument(input)}`,
+      );
+      setLines((current) => [...current, ...output, "", "Customer message:"]);
+      return;
+    }
+    if (!input) return;
     const displayInput = input.replace(/(--api-key(?:=|\s+))\S+/i, "$1[redacted]");
     setCommand("");
     commandHistoryRef.current = [...commandHistoryRef.current, displayInput].slice(-50);
@@ -1406,21 +1472,19 @@ function TerminalApp({
     let output: string[] = [];
     if (/--api-key(?:=|\s+)/i.test(input)) {
       output = ["For safety, enter the key in the session-only field above instead of command history."];
-    } else if (name === "python" || name === "python3") {
-      setRunning(true);
-      setRuntimeStatus("Starting Python…");
-      const result = await runPython(input);
+    } else if (/^python3?\s+support_agent_router\.py$/i.test(input)) {
+      setBrowserPrompt("customer-id");
+      setBrowserCustomerId("");
       output = [
-        ...result.stdout.replace(/\s+$/, "").split("\n").filter(Boolean),
-        ...result.stderr.replace(/\s+$/, "").split("\n").filter(Boolean),
-        `[exit ${result.exitCode}]`,
+        "Support Agent Router. Type 'quit' at either browser prompt to exit.",
+        "Customer ID (optional):",
       ];
-      if (/OPENAI_API_KEY|api key/i.test(result.stderr) && keyStatus.startsWith("No session")) {
-        output.push("Load a session-only key above, or run locally with OPENAI_API_KEY.");
-      }
-      setRunning(false);
+    } else if (name === "python" || name === "python3") {
+      output = await executePython(input);
     } else if (name === "help") {
       output = [
+        "Press Tab to complete commands, filenames, apps, and reply modes.",
+        "Run python3 support_agent_router.py with no arguments for interactive prompts.",
         "python3 support_agent_router.py --help",
         'python3 support_agent_router.py "429 during a burst" --give-reply auto',
         "python test_pure.py",
@@ -1598,12 +1662,32 @@ function TerminalApp({
         {lines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}
       </div>
       <form onSubmit={run}>
-        <label htmlFor="terminal-command">rw@support:~$</label>
+        <label htmlFor="terminal-command">
+          {browserPrompt === "customer-id"
+            ? "customer-id>"
+            : browserPrompt === "issue"
+              ? "customer>"
+              : "rw@support:~$"}
+        </label>
         <input
           id="terminal-command"
           value={command}
           onChange={(event) => setCommand(event.target.value)}
           onKeyDown={(event) => {
+            if (event.key === "Tab") {
+              event.preventDefault();
+              const completion = browserPrompt
+                ? { value: command.toLowerCase().startsWith("q") ? "quit" : command, matches: ["quit"] }
+                : completeTerminalInput(command);
+              setCommand(completion.value);
+              if (completion.matches.length > 1) {
+                setLines((current) => [
+                  ...current,
+                  `[complete] ${completion.matches.slice(0, 8).join(" · ")}`,
+                ]);
+              }
+              return;
+            }
             if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
             event.preventDefault();
             const history = commandHistoryRef.current;
@@ -1616,7 +1700,7 @@ function TerminalApp({
           }}
           autoComplete="off"
           disabled={running}
-          aria-label="Terminal command"
+          aria-label="Terminal command. Press Tab to complete"
         />
       </form>
     </div>

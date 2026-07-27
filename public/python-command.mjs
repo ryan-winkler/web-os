@@ -4,6 +4,74 @@ const PYTHON_FILES = new Set([
   "test_support_agent_router.py",
 ]);
 
+export const TERMINAL_COMPLETIONS = [
+  "help",
+  "clear",
+  "dir",
+  "ls",
+  "tree",
+  "pwd",
+  "history",
+  "whoami",
+  "hostname",
+  "ver",
+  "neofetch",
+  "ipconfig",
+  "status",
+  "manual",
+  "license",
+  "exit",
+  "cat README.md",
+  "cat MANUAL.md",
+  "download all",
+  "open router",
+  "open terminal",
+  "open files",
+  "open tools",
+  "open games",
+  "open doom",
+  "open flash",
+  "open about",
+  "python3 support_agent_router.py",
+  "python3 support_agent_router.py --help",
+  "python3 support_agent_router.py --give-reply prepared",
+  "python3 support_agent_router.py --give-reply auto",
+  "python3 support_agent_router.py --give-reply draft",
+  "python3 support_agent_router.py --give-reply revise",
+  "python3 support_agent_router.py --give-reply send",
+  "python test_pure.py",
+  "python test_support_agent_router.py",
+];
+
+export function getTerminalCompletions(input) {
+  const prefix = input.toLowerCase();
+  return TERMINAL_COMPLETIONS.filter((candidate) =>
+    candidate.toLowerCase().startsWith(prefix),
+  );
+}
+
+export function completeTerminalInput(input) {
+  const matches = getTerminalCompletions(input);
+  if (matches.length < 2) return { value: matches[0] ?? input, matches };
+  const commonPrefix = matches.reduce((prefix, candidate) => {
+    let index = 0;
+    while (
+      index < prefix.length
+      && index < candidate.length
+      && prefix[index].toLowerCase() === candidate[index].toLowerCase()
+    ) index += 1;
+    return prefix.slice(0, index);
+  });
+  return {
+    value: commonPrefix.length > input.length ? commonPrefix : input,
+    matches,
+  };
+}
+
+export function quoteCommandArgument(value) {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
 export function tokenizeCommand(input) {
   const tokens = [];
   let token = "";
