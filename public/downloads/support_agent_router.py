@@ -487,10 +487,10 @@ def configure_api_key(api_key: str) -> None:
 
         if sys.platform == "emscripten":
             import httpx
-            from pyodide.http import pyfetch
+            from pyodide.http import pyxhr
 
-            class PyfetchTransport(httpx.AsyncBaseTransport):
-                """Bridge httpx to the browser Fetch API used by Pyodide."""
+            class PyxhrTransport(httpx.AsyncBaseTransport):
+                """Bridge httpx to synchronous XHR inside the browser worker."""
 
                 async def handle_async_request(self, request):
                     blocked = {b"connection", b"content-length", b"host"}
@@ -499,20 +499,19 @@ def configure_api_key(api_key: str) -> None:
                         for name, value in request.headers.raw
                         if name.lower() not in blocked
                     }
-                    response = await pyfetch(
+                    response = getattr(pyxhr, request.method.casefold())(
                         str(request.url),
-                        method=request.method,
                         headers=headers,
-                        body=(await request.aread()).decode(),
+                        data=(await request.aread()).decode(),
                     )
                     return httpx.Response(
-                        response.status,
+                        response.status_code,
                         headers=response.headers,
-                        content=await response.bytes(),
+                        content=response.content,
                         request=request,
                     )
 
-            http_client = httpx.AsyncClient(transport=PyfetchTransport())
+            http_client = httpx.AsyncClient(transport=PyxhrTransport())
             set_default_openai_client(
                 AsyncOpenAI(
                     api_key=api_key,

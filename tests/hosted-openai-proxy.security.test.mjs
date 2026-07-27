@@ -24,7 +24,8 @@ test("hosted OpenAI access keeps the shared key behind a bounded server proxy", 
   assert.match(browserWorker, /api\/openai\/v1/);
   assert.match(browserWorker, /sessionApiKey \|\| "sk-site-proxy-not-a-secret"/);
   assert.match(browserWorker, /file === "support_agent_router\.py" \? apiBase : ""/);
-  assert.match(router, /class PyfetchTransport\(httpx\.AsyncBaseTransport\)/);
-  assert.match(router, /response = await pyfetch\(/);
-  assert.match(router, /httpx\.AsyncClient\(transport=PyfetchTransport\(\)\)/);
+  assert.match(browserWorker, /const proxy = pyodide\.runPython\(`/);
+  assert.match(router, /class PyxhrTransport\(httpx\.AsyncBaseTransport\)/);
+  assert.match(router, /response = getattr\(pyxhr, request\.method\.casefold\(\)\)\(/);
+  assert.match(router, /httpx\.AsyncClient\(transport=PyxhrTransport\(\)\)/);
 });
