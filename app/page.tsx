@@ -5,6 +5,7 @@ import {
   FormEvent,
   PointerEvent as ReactPointerEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -13,8 +14,16 @@ import {
   completeTerminalInput,
   quoteCommandArgument,
 } from "../public/python-command.mjs";
+import { DaedalApp } from "./desktop/DaedalApps";
+import {
+  APP_CATEGORIES,
+  APP_IDS,
+  APP_REGISTRY as APPS,
+  TASKBAR_PINNED,
+  type AppCategory,
+  type AppId,
+} from "./desktop/appRegistry";
 
-type AppId = "doom" | "games" | "utilities" | "flash" | "router" | "tools" | "files" | "terminal" | "about" | "work" | "notes" | "help";
 type RouteName =
   | "RateLimitAgent"
   | "LatencyAgent"
@@ -43,6 +52,7 @@ type RouteResult = {
 
 type TrayPanel = "system" | "calendar" | null;
 type Wallpaper = "sunset" | "teal";
+type SearchTab = "All" | "Apps" | "Files" | "Commands";
 type PythonRunResult = {
   stdout: string;
   stderr: string;
@@ -54,21 +64,6 @@ type DesktopContextMenu = {
   y: number;
   target: "desktop" | "public" | "python";
   fileName?: string;
-};
-
-const APPS: Record<AppId, { title: string; glyph: string; description: string }> = {
-  doom: { title: "DOOM — js-dos", glyph: "D00M", description: "The classic desktop break, embedded from the requested js-dos build" },
-  games: { title: "Games", glyph: "GAME", description: "DOOM and two small local break games" },
-  utilities: { title: "Utilities", glyph: "UTIL", description: "Scratchpad, calculator, image viewer, and system monitor" },
-  flash: { title: "Flash Files", glyph: "SWF", description: "Badger Badger Badger and third-party attributions" },
-  router: { title: "Support Router", glyph: "PY", description: "Route customer issues and prepare a human-reviewed reply" },
-  tools: { title: "Support Tools", glyph: "SLA", description: "Timers, request IDs, backoff, and status codes" },
-  files: { title: "Public", glyph: "DIR", description: "Apps, source, tests, README, downloads, and project notes" },
-  terminal: { title: "Command Prompt — support_agent_router.py", glyph: ">_", description: "Run the shipped Python files in the command console" },
-  about: { title: "About me", glyph: "RW", description: "Profile card, selected work, and field notes" },
-  work: { title: "Selected Work", glyph: "LAB", description: "Current systems and public projects" },
-  notes: { title: "PROCESS.md", glyph: "MD", description: "Decisions, boundaries, and interview notes" },
-  help: { title: "Help & UX Review", glyph: "?", description: "Shortcuts, safeguards, and Nielsen review" },
 };
 
 const FILES = [
@@ -120,26 +115,39 @@ const STATUS_CODES = [
   ["503", "Unavailable", "Check status, preserve request IDs, and degrade safely."],
 ] as const;
 
-const INITIAL_WINDOWS: Record<AppId, WindowState> = {
+const OPENING_WINDOWS: Partial<Record<AppId, WindowState>> = {
   doom: { open: true, minimized: false, maximized: false, x: 405, y: 58, width: 690, height: 565, z: 6 },
-  games: { open: false, minimized: false, maximized: false, x: 310, y: 84, width: 720, height: 590, z: 2 },
-  utilities: { open: false, minimized: false, maximized: false, x: 330, y: 88, width: 730, height: 600, z: 2 },
-  flash: { open: false, minimized: false, maximized: false, x: 255, y: 96, width: 720, height: 570, z: 2 },
-  router: { open: false, minimized: false, maximized: false, x: 120, y: 76, width: 760, height: 650, z: 2 },
-  tools: { open: false, minimized: false, maximized: false, x: 410, y: 92, width: 690, height: 600, z: 2 },
-  files: { open: false, minimized: false, maximized: false, x: 170, y: 104, width: 720, height: 560, z: 2 },
   terminal: { open: true, minimized: false, maximized: false, x: 225, y: 186, width: 760, height: 520, z: 4 },
-  about: { open: false, minimized: false, maximized: false, x: 190, y: 66, width: 760, height: 610, z: 3 },
-  work: { open: false, minimized: false, maximized: false, x: 330, y: 82, width: 740, height: 590, z: 2 },
   notes: { open: true, minimized: false, maximized: false, x: 1050, y: 105, width: 365, height: 665, z: 5 },
-  help: { open: false, minimized: false, maximized: false, x: 380, y: 112, width: 690, height: 570, z: 2 },
 };
+const INITIAL_WINDOWS = Object.fromEntries(
+  APP_IDS.map((id, index) => {
+    const [width, height] = APPS[id].size;
+    return [
+      id,
+      OPENING_WINDOWS[id] ?? {
+        open: false,
+        minimized: false,
+        maximized: false,
+        x: 110 + (index % 8) * 34,
+        y: 62 + (index % 7) * 26,
+        width,
+        height,
+        z: 2,
+      },
+    ];
+  }),
+) as Record<AppId, WindowState>;
 
 const DEFAULT_ISSUE =
   "We are seeing intermittent 429s during traffic bursts and customers are waiting too long for a response.";
-const PUBLIC_APPS: AppId[] = ["doom", "games", "utilities", "flash", "router", "tools", "files", "terminal", "about", "help"];
-const TASKBAR_PINNED: AppId[] = ["files", "terminal", "router"];
+const PUBLIC_APPS = APP_IDS;
 const DOWNLOAD_ARCHIVE = "/downloads/support-agent-router-interview.zip";
+const SEARCH_COMMANDS = [
+  { title: "Router help", command: "python3 support_agent_router.py --help", keywords: "python cli argparse" },
+  { title: "Run pure tests", command: "python test_pure.py", keywords: "test offline no network" },
+  { title: "Rate-limit example", command: 'python3 support_agent_router.py "429 during a burst" --give-reply auto', keywords: "support route reply" },
+] as const;
 
 function routeIssue(issue: string): RouteResult {
   const text = issue.toLowerCase();
@@ -227,7 +235,10 @@ function downloadText(filename: string, text: string) {
 export default function Desktop() {
   const [windows, setWindows] = useState(INITIAL_WINDOWS);
   const [startOpen, setStartOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [launcherQuery, setLauncherQuery] = useState("");
+  const [startCategory, setStartCategory] = useState<"All applications" | AppCategory>("All applications");
+  const [searchTab, setSearchTab] = useState<SearchTab>("All");
   const [trayPanel, setTrayPanel] = useState<TrayPanel>(null);
   const [contextMenu, setContextMenu] = useState<DesktopContextMenu | null>(null);
   const [terminalRequest, setTerminalRequest] = useState<TerminalRequest | null>(null);
@@ -279,13 +290,15 @@ export default function Desktop() {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setStartOpen(true);
+        setSearchOpen(true);
+        setStartOpen(false);
         setTrayPanel(null);
         window.setTimeout(() => launcherRef.current?.focus(), 20);
       }
       if (event.shiftKey && event.key === "Escape") {
         event.preventDefault();
         setStartOpen((current) => !current);
+        setSearchOpen(false);
         setTrayPanel(null);
       }
       if (event.shiftKey && event.key === "F10") {
@@ -298,6 +311,7 @@ export default function Desktop() {
       }
       if (event.key === "Escape") {
         setStartOpen(false);
+        setSearchOpen(false);
         setTrayPanel(null);
         setContextMenu(null);
       }
@@ -309,8 +323,9 @@ export default function Desktop() {
   useEffect(() => {
     const closeTransientPanels = (event: globalThis.PointerEvent) => {
       const target = event.target as HTMLElement;
-      if (target.closest(".start-menu, .taskbar, .tray-panel, .desktop-context-menu")) return;
+      if (target.closest(".start-menu, .search-panel, .taskbar, .tray-panel, .desktop-context-menu")) return;
       setStartOpen(false);
+      setSearchOpen(false);
       setTrayPanel(null);
       setContextMenu(null);
     };
@@ -332,6 +347,7 @@ export default function Desktop() {
   const openApp = (id: AppId) => {
     focusApp(id);
     setStartOpen(false);
+    setSearchOpen(false);
     setTrayPanel(null);
     setContextMenu(null);
     setDesktopRevealed(false);
@@ -342,6 +358,7 @@ export default function Desktop() {
     focusApp("terminal");
     setTerminalRequest({ id: Date.now(), command });
     setStartOpen(false);
+    setSearchOpen(false);
     setTrayPanel(null);
     setContextMenu(null);
     setToast(`Running ${command}.`);
@@ -385,12 +402,18 @@ export default function Desktop() {
   };
 
   const filteredApps = PUBLIC_APPS.filter((id) =>
-    `${APPS[id].title} ${APPS[id].description} ${id} ${
+    `${APPS[id].title} ${APPS[id].description} ${APPS[id].keywords.join(" ")} ${id} ${
       id === "terminal" ? "command cmd python console" : ""
     }`.toLowerCase().includes(launcherQuery.toLowerCase()),
   );
+  const startApps = PUBLIC_APPS.filter(
+    (id) => startCategory === "All applications" || APPS[id].category === startCategory,
+  );
   const filteredFiles = FILES.filter((file) =>
     `${file.name} ${file.description}`.toLowerCase().includes(launcherQuery.toLowerCase()),
+  );
+  const filteredCommands = SEARCH_COMMANDS.filter((item) =>
+    `${item.title} ${item.command} ${item.keywords}`.toLowerCase().includes(launcherQuery.toLowerCase()),
   );
   const focusedApp = (Object.keys(APPS) as AppId[])
     .filter((id) => windows[id].open && !windows[id].minimized)
@@ -476,6 +499,12 @@ export default function Desktop() {
             </MovableDesktopItem>
           ))}
           <MovableDesktopItem>
+            <button className="desktop-icon" onClick={() => openApp("files")}>
+              <DesktopArtifact kind="file" glyph="MD" />
+              <span>README.md</span>
+            </button>
+          </MovableDesktopItem>
+          <MovableDesktopItem>
             <button
               className="desktop-icon"
               onClick={() => openApp("files")}
@@ -514,53 +543,55 @@ export default function Desktop() {
           </dl>
         </aside>
 
-        {(Object.keys(APPS) as AppId[]).map((id) => {
+        {APP_IDS.map((id) => {
           const state = windows[id];
-          if (!state.open || state.minimized) return null;
+          if (!state.open) return null;
           return (
-            <AppWindow
-              key={id}
-              id={id}
-              state={state}
-              title={APPS[id].title}
-              glyph={APPS[id].glyph}
-              onFocus={() => focusApp(id)}
-              onDrag={(event) => beginDrag(id, event)}
-              onClose={() => {
-                patchWindow(id, { open: false });
-                setToast(`${APPS[id].title} closed.`);
-              }}
-              onMinimize={() => patchWindow(id, { minimized: true })}
-              onMaximize={() => patchWindow(id, { maximized: !state.maximized })}
-            >
-              {id === "doom" && <DoomApp />}
-              {id === "games" && <GamesApp openApp={openApp} />}
-              {id === "utilities" && <UtilitiesApp wallpaper={wallpaper} setWallpaper={setWallpaper} />}
-              {id === "flash" && <FlashFolderApp />}
-              {id === "router" && (
-                <SupportFolderApp
-                  onRouted={incrementRouted}
-                  onDraftSaved={incrementDrafts}
-                  notify={setToast}
-                  openApp={openApp}
-                  runInTerminal={runInTerminal}
-                />
-              )}
-              {id === "tools" && <ToolsApp />}
-              {id === "files" && <FilesApp notify={setToast} openApp={openApp} runInTerminal={runInTerminal} />}
-              {id === "terminal" && (
-                <TerminalApp
-                  openApp={openApp}
-                  request={terminalRequest}
-                  windows={windows}
-                  patchWindow={patchWindow}
-                />
-              )}
-              {id === "about" && <WebsiteFolderApp openApp={openApp} />}
-              {id === "work" && <WorkApp />}
-              {id === "notes" && <DecisionMarkdownApp />}
-              {id === "help" && <HelpApp openApp={openApp} />}
-            </AppWindow>
+            <div key={id} hidden={state.minimized}>
+              <AppWindow
+                id={id}
+                state={state}
+                title={APPS[id].title}
+                glyph={APPS[id].glyph}
+                onFocus={() => focusApp(id)}
+                onDrag={(event) => beginDrag(id, event)}
+                onClose={() => {
+                  patchWindow(id, { open: false });
+                  setToast(`${APPS[id].title} closed.`);
+                }}
+                onMinimize={() => patchWindow(id, { minimized: true })}
+                onMaximize={() => patchWindow(id, { maximized: !state.maximized })}
+              >
+                {id === "doom" && <DoomApp />}
+                {id === "games" && <GamesApp openApp={openApp} />}
+                {id === "utilities" && <UtilitiesApp wallpaper={wallpaper} setWallpaper={setWallpaper} />}
+                {id === "flash" && <FlashFolderApp />}
+                {id === "router" && (
+                  <SupportFolderApp
+                    onRouted={incrementRouted}
+                    onDraftSaved={incrementDrafts}
+                    notify={setToast}
+                    openApp={openApp}
+                    runInTerminal={runInTerminal}
+                  />
+                )}
+                {id === "tools" && <ToolsApp />}
+                {id === "files" && <FilesApp notify={setToast} openApp={openApp} runInTerminal={runInTerminal} />}
+                {id === "terminal" && (
+                  <TerminalApp
+                    openApp={openApp}
+                    request={terminalRequest}
+                    windows={windows}
+                    patchWindow={patchWindow}
+                  />
+                )}
+                {id === "about" && <WebsiteFolderApp openApp={openApp} />}
+                {id === "work" && <WorkApp />}
+                {id === "notes" && <DecisionMarkdownApp />}
+                {id === "help" && <HelpApp openApp={openApp} />}
+                <DaedalApp id={id} />
+              </AppWindow>
+            </div>
           );
         })}
 
@@ -623,58 +654,150 @@ export default function Desktop() {
       </section>
 
       {startOpen && (
-        <section className="start-menu glass-panel" aria-label="Start menu">
-          <div className="start-profile">
-            <span className="avatar">RW</span>
-            <div>
-              <strong>Ryan Winkler</strong>
-              <span>Support workstation</span>
+        <section
+          className="start-menu glass-panel"
+          aria-label="Start menu"
+          onKeyDown={(event) => {
+            if (
+              event.key.length === 1 &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.altKey
+            ) {
+              setLauncherQuery(event.key);
+              setStartOpen(false);
+              setSearchOpen(true);
+              window.setTimeout(() => launcherRef.current?.focus(), 20);
+            }
+          }}
+        >
+          <aside className="start-sidebar" aria-label="Start locations">
+            <div className="start-profile">
+              <span className="avatar">RW</span>
+              <div>
+                <strong>Ryan Winkler</strong>
+                <span>AI Support Engineer</span>
+              </div>
+            </div>
+            <button className={startCategory === "All applications" ? "active" : ""} onClick={() => setStartCategory("All applications")}>
+              <span>☷</span><strong>All applications</strong>
+            </button>
+            <button onClick={() => openApp("files")}><span>□</span><strong>Documents</strong></button>
+            <button onClick={() => openApp("photos")}><span>▧</span><strong>Pictures</strong></button>
+            <button onClick={() => openApp("video")}><span>▷</span><strong>Videos</strong></button>
+            <button onClick={resetDesktop}><span>↺</span><strong>Reset session</strong></button>
+          </aside>
+          <div className="start-apps">
+            <header>
+              <div><span className="app-eyebrow">Start</span><strong>{startCategory}</strong></div>
+              <button
+                aria-label="Search applications"
+                onClick={() => {
+                  setStartOpen(false);
+                  setSearchOpen(true);
+                  window.setTimeout(() => launcherRef.current?.focus(), 20);
+                }}
+              >
+                <span className="search-icon" aria-hidden="true" />
+              </button>
+            </header>
+            <nav className="start-category-tabs" aria-label="Application categories">
+              {APP_CATEGORIES.map((category) => (
+                <button
+                  key={category}
+                  className={startCategory === category ? "active" : ""}
+                  onClick={() => setStartCategory(category)}
+                >
+                  {category}
+                </button>
+              ))}
+            </nav>
+            <div className="start-app-list">
+              {[...startApps]
+                .sort((a, b) => APPS[a].title.localeCompare(APPS[b].title))
+                .map((id) => (
+                  <button key={id} onClick={() => openApp(id)}>
+                    <AppGlyph glyph={APPS[id].glyph} small />
+                    <span><strong>{APPS[id].title}</strong><small>{APPS[id].description}</small></span>
+                  </button>
+                ))}
             </div>
           </div>
-          <label className="start-search" htmlFor="start-search">
+          <footer className="start-footer">
+            <span>{APP_IDS.length} applications · local shell</span>
+            <a href={DOWNLOAD_ARCHIVE} download>Download project ZIP</a>
+          </footer>
+        </section>
+      )}
+
+      {searchOpen && (
+        <section className="search-panel glass-panel" aria-label="Search">
+          <nav className="search-tabs" aria-label="Search filters">
+            {(["All", "Apps", "Files", "Commands"] as SearchTab[]).map((tab) => (
+              <button key={tab} className={searchTab === tab ? "active" : ""} onClick={() => setSearchTab(tab)}>{tab}</button>
+            ))}
+            <button className="search-close" aria-label="Close search" onClick={() => setSearchOpen(false)}>×</button>
+          </nav>
+          <div className="search-content">
+            <section className="search-results" aria-label="Search results">
+              {!launcherQuery && <p className="search-section-label">Suggested</p>}
+              {(searchTab === "All" || searchTab === "Apps") && filteredApps.map((id, index) => (
+                <button key={id} className={index === 0 ? "best" : ""} onClick={() => openApp(id)}>
+                  <AppGlyph glyph={APPS[id].glyph} small />
+                  <span><strong>{APPS[id].title}</strong><small>{APPS[id].category} · {APPS[id].description}</small></span>
+                </button>
+              ))}
+              {(searchTab === "All" || searchTab === "Files") && filteredFiles.map((file) => (
+                <button key={file.name} onClick={() => file.name.endsWith(".py") ? runInTerminal(`python ${file.name}`) : openApp("files")}>
+                  <DesktopArtifact kind="file" glyph={file.glyph} />
+                  <span><strong>{file.name}</strong><small>{file.description}</small></span>
+                </button>
+              ))}
+              {(searchTab === "All" || searchTab === "Commands") && filteredCommands.map((item) => (
+                <button key={item.command} onClick={() => runInTerminal(item.command)}>
+                  <AppGlyph glyph=">_" small />
+                  <span><strong>{item.title}</strong><small>{item.command}</small></span>
+                </button>
+              ))}
+              {!filteredApps.length && !filteredFiles.length && !filteredCommands.length && <p className="start-empty">No matching app, file, or command.</p>}
+            </section>
+            <aside className="search-detail">
+              {filteredApps[0] ? (
+                <>
+                  <AppGlyph glyph={APPS[filteredApps[0]].glyph} />
+                  <span className="app-eyebrow">Best match</span>
+                  <h2>{APPS[filteredApps[0]].title}</h2>
+                  <p>{APPS[filteredApps[0]].description}</p>
+                  <button onClick={() => openApp(filteredApps[0])}>Open</button>
+                </>
+              ) : (
+                <>
+                  <span className="search-detail-mark">⌕</span>
+                  <h2>Search the workstation</h2>
+                  <p>Apps, interview files, and runnable terminal commands share one index.</p>
+                </>
+              )}
+            </aside>
+          </div>
+          <label className="search-field" htmlFor="desktop-search">
             <span className="search-icon" aria-hidden="true" />
             <input
               ref={launcherRef}
-              id="start-search"
+              id="desktop-search"
               value={launcherQuery}
               onChange={(event) => setLauncherQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                if (filteredApps[0]) openApp(filteredApps[0]);
+                else if (filteredFiles[0]) {
+                  if (filteredFiles[0].name.endsWith(".py")) runInTerminal(`python ${filteredFiles[0].name}`);
+                  else openApp("files");
+                } else if (filteredCommands[0]) runInTerminal(filteredCommands[0].command);
+              }}
               placeholder="Search apps, files, and commands"
+              autoFocus
             />
           </label>
-          <div className="start-grid">
-            {filteredApps.map((id) => (
-              <button key={id} onClick={() => openApp(id)}>
-                <AppGlyph glyph={APPS[id].glyph} small />
-                <span>{APPS[id].title}</span>
-              </button>
-            ))}
-          </div>
-          {filteredFiles.length > 0 && (
-            <section className="start-recents" aria-label="Recent interview files">
-              <header>
-                <strong>Interview files</strong>
-                <span>
-                  <a href={DOWNLOAD_ARCHIVE} download>Download all</a>
-                  <button onClick={() => openApp("files")}>Open folder</button>
-                </span>
-              </header>
-              <div>
-                {filteredFiles.slice(0, 3).map((file) => (
-                  <button key={file.name} onClick={() => file.name.endsWith(".py") ? runInTerminal(`python ${file.name}`) : openApp("files")}>
-                    <DesktopArtifact kind="file" glyph={file.glyph} />
-                    <span><strong>{file.name}</strong><small>{file.description}</small></span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-          {!filteredApps.length && !filteredFiles.length && (
-            <p className="start-empty">No matching app or file.</p>
-          )}
-          <div className="start-footer">
-            <span>Local demo · no customer messages sent</span>
-            <button onClick={resetDesktop}>Reset layout</button>
-          </div>
         </section>
       )}
 
@@ -685,6 +808,7 @@ export default function Desktop() {
           aria-expanded={startOpen}
           onClick={() => {
             setStartOpen((current) => !current);
+            setSearchOpen(false);
             setTrayPanel(null);
           }}
         >
@@ -696,10 +820,11 @@ export default function Desktop() {
         </button>
         <span className="taskbar-divider" aria-hidden="true" />
         <button
-          className={`search-button ${startOpen ? "active" : ""}`}
+          className={`search-button ${searchOpen ? "active" : ""}`}
           aria-label="Find an app"
           onClick={() => {
-            setStartOpen(true);
+            setSearchOpen((current) => !current);
+            setStartOpen(false);
             setTrayPanel(null);
             window.setTimeout(() => launcherRef.current?.focus(), 20);
           }}
@@ -1254,14 +1379,6 @@ function FilesApp({
               <span>{APPS[id].title}</span>
             </button>
           ))}
-          <button onClick={() => openApp("work")}>
-            <TaskbarIcon id="work" />
-            <span>Selected Work</span>
-          </button>
-          <button onClick={() => openApp("notes")}>
-            <TaskbarIcon id="notes" />
-            <span>PROCESS.md</span>
-          </button>
           <a href="https://ryanw.eu/" target="_blank" rel="noreferrer">
             <DesktopArtifact kind="file" glyph="HTML" />
             <span>ryanw.eu</span>
@@ -1313,7 +1430,7 @@ function TerminalApp({
 }) {
   const welcome = [
     "Ryan Support Workstation — real browser Python terminal",
-    "The first Python command loads CPython and the shipped dependencies.",
+    "CPython and the shipped dependencies warm in the background after the shell appears.",
     "Run the router with no arguments for browser-native interactive prompts.",
     "Try: python3 support_agent_router.py --help",
     "Try: python test_pure.py",
@@ -1365,10 +1482,10 @@ function TerminalApp({
     };
   }, []);
 
-  const ensureWorker = () => {
+  const ensureWorker = useCallback(() => {
     let worker = workerRef.current;
     if (!worker) {
-      worker = new Worker("/python-worker.mjs", { type: "module" });
+      worker = new Worker("/python-worker.mjs?v=20260727-5", { type: "module" });
       workerRef.current = worker;
       worker.onmessage = ({ data }: MessageEvent<{ type: string; message?: string } & PythonRunResult>) => {
         if (data.type === "progress") {
@@ -1377,6 +1494,14 @@ function TerminalApp({
         }
         if (data.type === "key-status") {
           setKeyStatus(data.message ?? "Session key updated");
+          return;
+        }
+        if (data.type === "ready") {
+          setRuntimeStatus("Python runtime ready");
+          return;
+        }
+        if (data.type === "warm-error") {
+          setRuntimeStatus(data.message ? `Python warm-up failed: ${data.message}` : "Python warm-up failed");
           return;
         }
         pendingRef.current?.(data);
@@ -1394,7 +1519,24 @@ function TerminalApp({
       };
     }
     return worker;
-  };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const warm = async () => {
+      if ("serviceWorker" in navigator) {
+        await navigator.serviceWorker.ready;
+      }
+      if (cancelled) return;
+      setRuntimeStatus("Warming Python in the background…");
+      ensureWorker().postMessage({ type: "warm" });
+    };
+    const timer = window.setTimeout(() => void warm(), 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [ensureWorker]);
 
   const runPython = (input: string) =>
     new Promise<PythonRunResult>((resolve) => {
@@ -1461,7 +1603,7 @@ function TerminalApp({
       setBrowserPrompt("issue");
       setLines((current) => [
         ...current,
-        `Customer ID (optional): ${input ? "[provided]" : "[not provided]"}`,
+        ...(input ? ["Customer ID: [provided]"] : []),
         "Customer message:",
       ]);
       return;
@@ -1597,7 +1739,7 @@ function TerminalApp({
       if (target in APPS) {
         openApp(target);
         output = [`Opened ${APPS[target].title}`];
-      } else output = ["Unknown app. Try: router, terminal, files, tools, games, doom, flash, about"];
+      } else output = ["Unknown app. Type “open ” then press Tab to list applications."];
     } else if (name === "tasklist") {
       output = (Object.keys(windows) as AppId[])
         .filter((id) => windows[id].open)
@@ -1780,10 +1922,10 @@ function DoomApp() {
   return (
     <div className="doom-app">
       <iframe
-        src="/doom/index.html"
+        src="/doom/launcher.html"
         title="DOOM running in js-dos"
         allow="autoplay; fullscreen; gamepad"
-        sandbox="allow-scripts allow-pointer-lock allow-popups allow-downloads"
+        sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-downloads"
       />
       <aside>
         <span>Desktop only · click the game panel to start</span>
@@ -2480,12 +2622,12 @@ function AttributionsDocument() {
       <p className="markdown-meta">ATTRIBUTIONS.md · links verified 27 July 2026</p>
       <h2>Dustin Brett / daedalOS</h2>
       <p>
-        <strong>daedalOS by Dustin Brett</strong> is a direct design and interaction reference. Its desktop metaphor,
-        window management, Start experience, taskbar focus states, and system-tray detail established the quality bar
-        for this original implementation.
+        <strong>daedalOS by Dustin Brett</strong> is a direct design, interaction, and implementation reference.
+        This workstation adapts its process registry, persistent window lifecycle, Start/Search behaviour, taskbar
+        states, and lazy preload strategy to the support-engineering use case.
       </p>
       <p>
-        MIT License · Copyright © 2020 Dustin Brett ·{" "}
+        MIT License · Copyright © 2025 Dustin Brett ·{" "}
         <a href="https://github.com/DustinBrett/daedalOS" target="_blank" rel="noreferrer">Project and licence ↗</a>
       </p>
       <h2>jsagayap / CoffeeOS</h2>
@@ -2497,7 +2639,7 @@ function AttributionsDocument() {
         MIT License · Copyright © 2022 jsagayap ·{" "}
         <a href="https://github.com/jsagayap/CoffeeOS" target="_blank" rel="noreferrer">Project and licence ↗</a>
       </p>
-      <p>No daedalOS or CoffeeOS source code, marks, or bundled assets are copied here.</p>
+      <p>The daedalOS MIT notice is retained in the downloadable project. Its marks and bundled third-party game data are not redistributed here.</p>
       <h2>awesome-web-desktops</h2>
       <p>
         Used for comparative research ·{" "}
@@ -2521,10 +2663,10 @@ function AttributionsDocument() {
       <p><a href="https://weebls-stuff.com/toons/badgers/" target="_blank" rel="noreferrer">Official creator page ↗</a></p>
       <h2>DOOM on js-dos</h2>
       <p>
-        A small original local launcher loads the upstream JS-DOS script, cover image, and game archive from
-        <code> thedoggybrad/doom_on_js-dos</code>, whose wrapper repository is MIT-licensed. Its visible manual link
-        opens this site’s local copy. DOOM game content and marks remain the property of their respective rights holders;
-        this project does not redistribute the game archive.
+        The pinned JS-DOS wrapper, runtime, cover image, and licence from
+        <code> thedoggybrad/doom_on_js-dos</code> are self-hosted for reliable, cached startup. Its visible manual link
+        opens this site’s local copy. The game archive remains on the upstream host and is cached only in the visitor&apos;s
+        browser. DOOM game content and marks remain the property of their respective rights holders.
       </p>
       <p><a href="https://github.com/thedoggybrad/doom_on_js-dos" target="_blank" rel="noreferrer">Source and licence ↗</a></p>
       <h2>Pyodide</h2>

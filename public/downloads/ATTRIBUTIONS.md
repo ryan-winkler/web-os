@@ -2,16 +2,18 @@
 
 ## Dustin Brett / daedalOS
 
-daedalOS by Dustin Brett is a direct design and interaction reference for this
-workstation. Its desktop metaphor, window management, Start experience, taskbar
-focus states, and system-tray detail established the quality bar for this
-original implementation.
+daedalOS by Dustin Brett is a direct design, interaction, and implementation
+reference for this workstation. The process registry, app inventory, persistent
+window lifecycle, Start/Search behaviour, taskbar states, and lazy preload
+strategy are adapted to this support-engineering use case.
 
 - Project: https://github.com/DustinBrett/daedalOS
 - Licence: MIT
-- Copyright: Copyright (c) 2020 Dustin Brett
+- Copyright: Copyright (c) 2025 Dustin Brett
 
-No daedalOS source code, marks, or bundled assets are copied here.
+The daedalOS MIT copyright and permission notice is retained in
+`DAEDALOS-LICENSE.txt` in the downloadable project. daedalOS marks and its
+bundled third-party game data are not redistributed here.
 
 ## jsagayap / CoffeeOS
 
@@ -46,12 +48,12 @@ from scratch; no Hyggshi OS source code or assets are copied.
 ## DOOM on js-dos
 
 The game window embeds `thedoggybrad/doom_on_js-dos`, whose wrapper repository
-is MIT-licensed. A small original local launcher loads the upstream JS-DOS
-script, cover image, and game archive from their original host so the visible
-manual link can point to this site’s local `MANUAL.md`. The manual adapts the
-upstream launch steps and key mapping. DOOM game content and marks remain the
-property of their respective rights holders. This site does not redistribute
-the game archive.
+is MIT-licensed. Its pinned JS-DOS wrapper, runtime, cover image, and licence
+are self-hosted so the iframe can start reliably and be cached. The game archive
+remains on its original host and is cached only in the visitor's browser. The
+manual adapts the upstream launch steps and key mapping. DOOM game content and
+marks remain the property of their respective rights holders. This site does
+not redistribute the game archive.
 
 - Source and licence: https://github.com/thedoggybrad/doom_on_js-dos
 - Upstream manual: https://github.com/thedoggybrad/doom_on_js-dos/blob/main/MANUAL.MD
@@ -67,8 +69,8 @@ or audio.
 ## Pyodide
 
 The browser terminal runs the shipped Python files with Pyodide: CPython
-compiled to WebAssembly. Pyodide is provided under the Mozilla Public License
-2.0 and loaded from its documented jsDelivr distribution.
+compiled to WebAssembly. The pinned official runtime and resolved dependency
+wheels are self-hosted and precached under the Mozilla Public License 2.0.
 
 - Project: https://pyodide.org/
 - Source and licence: https://github.com/pyodide/pyodide

@@ -1,7 +1,8 @@
-import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pyodide.mjs";
+import { loadPyodide } from "./pyodide/pyodide.mjs";
 import { parsePythonCommand } from "./python-command.mjs";
 
-const INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/";
+const INDEX_URL = "/pyodide/";
+const RUNTIME_VERSION = "20260727-5";
 const FILES = [
   "support_agent_router.py",
   "test_pure.py",
@@ -16,23 +17,51 @@ function progress(message) {
 }
 
 async function bootRuntime() {
+  const fileDownloads = Promise.all(FILES.map(async (name) => {
+    const response = await fetch(`/downloads/${name}?v=${RUNTIME_VERSION}`);
+    if (!response.ok) throw new Error(`Could not load ${name}.`);
+    return [name, await response.text()];
+  }));
+
   progress("Loading CPython in WebAssembly…");
-  const pyodide = await loadPyodide({ indexURL: INDEX_URL });
+  const nativeInstantiateStreaming = WebAssembly.instantiateStreaming.bind(WebAssembly);
+  WebAssembly.instantiateStreaming = async (source, imports) => {
+    const response = await source;
+    return response.headers.get("content-type")?.startsWith("application/wasm")
+      ? nativeInstantiateStreaming(response, imports)
+      : WebAssembly.instantiate(await response.arrayBuffer(), imports);
+  };
+  let pyodide;
+  try {
+    pyodide = await loadPyodide({ indexURL: INDEX_URL });
+  } finally {
+    WebAssembly.instantiateStreaming = nativeInstantiateStreaming;
+  }
   progress("Loading the shipped Python dependencies…");
-  await pyodide.loadPackage(["micropip", "pydantic", "pytest"]);
+  await pyodide.loadPackage(["micropip", "pydantic"]);
   await pyodide.runPythonAsync(`
 import micropip
-await micropip.install("openai-agents", reinstall=True)
+# ponytail: required by micropip 0.11.1 to materialize the SDK's transitive
+# dependencies; remove when its non-reinstall path installs httpx in Pyodide.
+await micropip.install("openai-agents==0.18.3", reinstall=True)
   `);
 
   progress("Mounting the interview files…");
-  await Promise.all(FILES.map(async (name) => {
-    const response = await fetch(`/downloads/${name}`);
-    if (!response.ok) throw new Error(`Could not load ${name}.`);
-    pyodide.FS.writeFile(name, await response.text(), { encoding: "utf8" });
-  }));
+  for (const [name, contents] of await fileDownloads) {
+    pyodide.FS.writeFile(name, contents, { encoding: "utf8" });
+  }
+  progress("Preparing the support router…");
+  await pyodide.runPythonAsync("import support_agent_router");
   progress("Python runtime ready.");
   return pyodide;
+}
+
+function getRuntime() {
+  runtimePromise ??= bootRuntime().catch((error) => {
+    runtimePromise = undefined;
+    throw error;
+  });
+  return runtimePromise;
 }
 
 async function run(command) {
@@ -41,11 +70,7 @@ async function run(command) {
   const args = file === "support_agent_router.py"
     ? [...parsedArgs, "--api-key", sessionApiKey || "sk-site-proxy-not-a-secret"]
     : parsedArgs;
-  runtimePromise ??= bootRuntime().catch((error) => {
-    runtimePromise = undefined;
-    throw error;
-  });
-  const pyodide = await runtimePromise;
+  const pyodide = await getRuntime();
   pyodide.globals.set("_run_spec_json", JSON.stringify({ file, args }));
   pyodide.globals.set("_openai_base_url", file === "support_agent_router.py" ? apiBase : "");
   const proxy = await pyodide.runPythonAsync(`
@@ -109,6 +134,18 @@ self.onmessage = async ({ data }) => {
       type: "key-status",
       message: sessionApiKey ? "Session key loaded in isolated worker memory" : "No session key loaded",
     });
+    return;
+  }
+  if (data.type === "warm") {
+    try {
+      await getRuntime();
+      self.postMessage({ type: "ready" });
+    } catch (error) {
+      self.postMessage({
+        type: "warm-error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     return;
   }
   if (data.type !== "run") return;

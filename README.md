@@ -1,10 +1,15 @@
 # Ryan Winkler support workstation
 
-An original browser desktop for Ryan's support-agent interview project.
+A browser desktop for Ryan's support-agent interview project, with its process
+registry, Start/Search interaction model, and preload strategy adapted from
+the MIT-licensed daedalOS design.
 
 ## What it shows
 
 - a polished windowed desktop with Start, taskbar, app finder, files, and local console
+- the complete daedalOS user-facing app inventory, including Monaco, TinyMCE,
+  PDF, media tools, emulators, and games; large third-party apps run in
+  sandboxed attributed frames instead of duplicating their licensed assets
 - an opening three-window composition with DOOM, the running CLI mirror, and `PROCESS.md`
 - deterministic multi-issue triage and specialist routing through the exact Python files
 - editable customer-reply preparation with revise, save, and fail-closed send controls
@@ -13,9 +18,11 @@ An original browser desktop for Ryan's support-agent interview project.
 - a Flash Files folder with the externally hosted Badger animation and a downloadable attribution record
 - an in-product review against Nielsen's ten usability heuristics
 
-The website is an original implementation. It does not copy code from the
-web-desktop references used for visual research. Its Command Prompt runs the
-shipped files in CPython through Pyodide. Hosted agent runs use a server-side
+The implementation is tailored to this interview and retains direct source and
+licence attribution for the web-desktop patterns and third-party runtimes it
+adapts. The Terminal shell renders immediately while a self-hosted Pyodide and
+the Agents SDK warm in a persistent worker. DOOM and the Python runtime are
+versioned in the service-worker cache. Hosted agent runs use a server-side
 key behind a lifetime €30 application cap, fixed model and output limits,
 per-IP throttling, and a no-tools policy. A visitor can instead use a personal
 key held in isolated worker memory for the current tab and sent over TLS only

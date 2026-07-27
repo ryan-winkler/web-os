@@ -79,8 +79,9 @@ python test_support_agent_router.py
 ## Browser workstation
 
 The accompanying website runs these exact Python files in CPython compiled to
-WebAssembly with Pyodide. The first Python command loads the runtime and the
-OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
+WebAssembly with Pyodide. The shell appears immediately while the pinned
+runtime and OpenAI Agents SDK warm in a worker; later commands reuse it.
+`python test_pure.py`,
 `python test_support_agent_router.py`, and CLI help run in the browser. The
 bare `python3 support_agent_router.py` command uses browser-native customer
 prompts before invoking the real one-shot script, because a Web Worker has no

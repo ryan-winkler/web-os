@@ -265,7 +265,11 @@ async function handleHostedOpenAI(request: Request, env: Env) {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    const hostedOpenAIResponse = await handleHostedOpenAI(request, env);
+    const hostedOpenAIResponse = env
+      ? await handleHostedOpenAI(request, env)
+      : url.pathname.startsWith("/api/openai/")
+        ? jsonResponse({ available: false, error: "Hosted API access is unavailable in the local preview." }, 503)
+        : null;
     if (hostedOpenAIResponse) return hostedOpenAIResponse;
 
     if (url.pathname === "/_vinext/image") {

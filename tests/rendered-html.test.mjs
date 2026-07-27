@@ -23,7 +23,7 @@ test("renders the finished support workstation", async () => {
   assert.match(html, /Ryan Winkler/);
   assert.match(html, /Support Router/);
   assert.match(html, /DOOM running in js-dos/);
-  assert.match(html, /Command Prompt — support_agent_router\.py/);
+  assert.match(html, />Terminal</);
   assert.match(html, /PROCESS\.md/);
   assert.match(html, />Public</);
   assert.match(html, /support_agent_router\.py/);

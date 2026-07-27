@@ -26,7 +26,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});',
+          }}
+        />
+      </body>
     </html>
   );
 }

@@ -1,7 +1,9 @@
 import io
+import inspect
 import json
 import logging
 import re
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr
@@ -96,20 +98,27 @@ class RouterPureTests(unittest.TestCase):
             self.assertEqual([], agents[agent_name].handoffs)
             for _title, url in router.learning_resources(agent_name):
                 self.assertTrue(url.startswith(router.OFFICIAL_SOURCE_PREFIXES))
-        with patch.object(
-            router.Runner,
-            "run_sync",
-            return_value=Mock(final_output="ok"),
-        ) as runner:
-            self.assertEqual("ok", router.invoke_agent(agents["FallbackAgent"], "issue"))
-        run_config = runner.call_args.kwargs["run_config"]
-        self.assertTrue(run_config.tracing_disabled)
-        self.assertFalse(run_config.trace_include_sensitive_data)
-        self.assertEqual(1, runner.call_args.kwargs["max_turns"])
-        self.assertEqual(
-            {"untrusted_customer_content": "issue"},
-            json.loads(runner.call_args.args[1]),
-        )
+        if sys.platform == "emscripten":
+            source = inspect.getsource(router.invoke_agent)
+            self.assertIn("Runner.run(", source)
+            self.assertIn("tracing_disabled=True", source)
+            self.assertIn("trace_include_sensitive_data=False", source)
+            self.assertIn("max_turns=1", source)
+        else:
+            with patch.object(
+                router.Runner,
+                "run_sync",
+                return_value=Mock(final_output="ok"),
+            ) as runner:
+                self.assertEqual("ok", router.invoke_agent(agents["FallbackAgent"], "issue"))
+            run_config = runner.call_args.kwargs["run_config"]
+            self.assertTrue(run_config.tracing_disabled)
+            self.assertFalse(run_config.trace_include_sensitive_data)
+            self.assertEqual(1, runner.call_args.kwargs["max_turns"])
+            self.assertEqual(
+                {"untrusted_customer_content": "issue"},
+                json.loads(runner.call_args.args[1]),
+            )
         for agent in agents.values():
             self.assertFalse(agent.model_settings.parallel_tool_calls)
             self.assertFalse(agent.model_settings.store)
