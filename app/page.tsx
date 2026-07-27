@@ -758,6 +758,7 @@ export default function Desktop() {
             <span>{now?.toLocaleDateString("en-IE", { day: "2-digit", month: "short" }) ?? "—"}</span>
           </button>
           <button className="show-desktop-button" onClick={toggleDesktop} aria-label={desktopRevealed ? "Restore open windows" : "Show desktop"}>
+            <span className="show-desktop-icon" aria-hidden="true">▯</span>
             <span className="taskbar-tooltip">{desktopRevealed ? "Restore windows" : "Show desktop"}</span>
           </button>
         </div>

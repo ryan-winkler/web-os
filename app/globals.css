@@ -1455,7 +1455,7 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
 .start-menu {
   position: fixed;
   left: 0;
-  bottom: 44px;
+  bottom: 48px;
   z-index: 9000;
   width: min(540px, calc(100vw - 8px));
   max-height: calc(100vh - 50px);
@@ -1696,7 +1696,7 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
   right: 0;
   bottom: 0;
   z-index: 9990;
-  height: 44px;
+  height: 48px;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1712,7 +1712,7 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
 .taskbar-apps button,
 .taskbar-system button {
   position: relative;
-  height: 40px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1917,12 +1917,13 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
 .taskbar-clock strong { font-size: 11px; }
 .taskbar-clock span { margin-top: 4px; color: var(--muted); font-size: 9px; }
 .show-desktop-button {
-  width: 10px;
+  width: 44px;
   margin-left: 4px;
   padding: 0;
   border-width: 0 0 0 1px !important;
   border-radius: 0 !important;
 }
+.show-desktop-icon { color: #91a9c8; font-size: 18px; }
 .network-icon { height: 18px; display: flex; align-items: end; gap: 2px; }
 .network-icon i { width: 3px; border-radius: 2px; background: #cfe0f5; }
 .network-icon i:nth-child(1) { height: 5px; }
@@ -1950,7 +1951,7 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
 .toast {
   position: fixed;
   right: 14px;
-  bottom: 52px;
+  bottom: 56px;
   z-index: 9800;
   max-width: 340px;
   padding: 9px 12px;
@@ -2091,13 +2092,13 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
   .terminal-toolbar > div { max-width: 70%; overflow-x: auto; }
   .terminal-toolbar button { flex: 0 0 auto; }
   .terminal-key-panel > div { grid-template-columns: 1fr; }
-  .start-menu { bottom: 44px; }
-  .taskbar { left: 0; right: 0; bottom: 0; height: 44px; padding: 2px 4px; }
+  .start-menu { bottom: 48px; }
+  .taskbar { left: 0; right: 0; bottom: 0; height: 48px; padding: 2px 4px; }
   .taskbar-apps { flex: 1; }
   .start-button,
   .search-button,
-  .taskbar-apps button { width: 40px; height: 40px; flex-basis: 40px; }
-  .taskbar-clock { width: 60px; height: 40px; padding: 0 3px; }
+  .taskbar-apps button { width: 44px; height: 44px; flex-basis: 44px; }
+  .taskbar-clock { width: 60px; height: 44px; padding: 0 3px; }
   .show-desktop-button { display: none; }
   .toast { display: none; }
 }
