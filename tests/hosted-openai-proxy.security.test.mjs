@@ -15,6 +15,8 @@ test("hosted OpenAI access keeps the shared key behind a bounded server proxy", 
   assert.match(worker, /payload\.max_output_tokens = Math\.min/);
   assert.match(worker, /payload\.tools = \[\]/);
   assert.match(worker, /spent_micros \+ reserved_micros \+ \? <= budget_micros/);
+  assert.match(worker, /const USD_TO_EUR_BUFFER = 1\.25/);
+  assert.match(worker, /\* USD_TO_EUR_BUFFER/);
   assert.match(worker, /request_count = request_count \+ 1/);
   assert.match(worker, /request\.headers\.get\("Origin"\) !== url\.origin/);
   assert.match(worker, /const usesHostedKey = suppliedKey === HOSTED_PROXY_KEY/);

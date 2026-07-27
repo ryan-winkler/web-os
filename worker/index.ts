@@ -30,6 +30,7 @@ const HOSTED_MODEL = "gpt-4.1-mini";
 const HOSTED_PROXY_KEY = "sk-site-proxy-not-a-secret";
 const MAX_REQUEST_BYTES = 64_000;
 const MAX_OUTPUT_TOKENS = 800;
+const USD_TO_EUR_BUFFER = 1.25;
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, {
@@ -106,8 +107,8 @@ async function checkRateLimit(request: Request, env: Env) {
 }
 
 function estimateReservedMicros(requestBytes: number) {
-  // gpt-4.1-mini standard pricing, conservatively treating every byte as an input token.
-  return Math.ceil(requestBytes * 0.4 + MAX_OUTPUT_TOKENS * 1.6);
+  // OpenAI prices in USD; the buffer keeps the €30 application cap conservative.
+  return Math.ceil((requestBytes * 0.4 + MAX_OUTPUT_TOKENS * 1.6) * USD_TO_EUR_BUFFER);
 }
 
 function actualCostMicros(payload: Record<string, unknown>, reserve: number) {
@@ -117,7 +118,9 @@ function actualCostMicros(payload: Record<string, unknown>, reserve: number) {
   const output = Math.max(0, Number(usage.output_tokens ?? 0));
   const details = usage.input_tokens_details as Record<string, unknown> | undefined;
   const cached = Math.min(input, Math.max(0, Number(details?.cached_tokens ?? 0)));
-  const micros = Math.ceil((input - cached) * 0.4 + cached * 0.1 + output * 1.6);
+  const micros = Math.ceil(
+    ((input - cached) * 0.4 + cached * 0.1 + output * 1.6) * USD_TO_EUR_BUFFER,
+  );
   return Math.min(reserve, Math.max(0, micros));
 }
 
