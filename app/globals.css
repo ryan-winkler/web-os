@@ -1978,6 +1978,15 @@ kbd { padding: 3px 6px; border: 1px solid rgba(255,255,255,.14); border-radius: 
   .taskbar-apps button { width: 44px; flex: 0 0 44px; justify-content: center; padding: 0; }
 }
 
+@media (min-width: 1051px) and (max-width: 1350px) {
+  .app-window[aria-label="PROCESS.md application"]:not(.maximized) {
+    left: auto !important;
+    right: 8px;
+    width: 300px !important;
+    min-width: 300px;
+  }
+}
+
 @media (min-width: 760px) and (max-width: 1050px) {
   .app-window:not(.maximized) {
     left: 12px !important;
