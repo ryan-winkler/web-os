@@ -25,49 +25,17 @@ type SupportedAppId = Exclude<
   | "help"
 >;
 
-const EXTERNAL_APPS: Partial<
-  Record<SupportedAppId, { url: string; note: string }>
-> = {
-  irc: {
-    url: "https://dustinbrett.com/?app=IRC",
-    note: "KiwiIRC through the attributed daedalOS implementation.",
-  },
-  classicube: {
-    url: "https://dustinbrett.com/?app=ClassiCube",
-    note: "ClassiCube through the attributed daedalOS implementation.",
-  },
-  dxball: {
-    url: "https://dustinbrett.com/?app=DXBall",
-    note: "DX-Ball opens in the attributed daedalOS implementation.",
-  },
-  spacecadet: {
-    url: "https://dustinbrett.com/?app=SpaceCadet",
-    note: "Space Cadet opens in the attributed daedalOS implementation.",
-  },
-  quake3: {
-    url: "https://dustinbrett.com/?app=Quake3",
-    note: "Quake III opens in the attributed daedalOS implementation.",
-  },
-  tic80: {
-    url: "https://dustinbrett.com/?app=Tic80",
-    note: "TIC-80 through the attributed daedalOS implementation.",
-  },
-  stable: {
-    url: "https://dustinbrett.com/?app=StableDiffusion",
-    note: "The browser Stable Diffusion workspace opens in daedalOS.",
-  },
-  emulator: {
-    url: "https://dustinbrett.com/?app=Emulator",
-    note: "EmulatorJS through the attributed daedalOS implementation.",
-  },
-  v86: {
-    url: "https://dustinbrett.com/?app=V86",
-    note: "Virtual x86 through the attributed daedalOS implementation.",
-  },
-  boxedwine: {
-    url: "https://dustinbrett.com/?app=BoxedWine",
-    note: "BoxedWine through the attributed daedalOS implementation.",
-  },
+const APP_SOURCES: Partial<Record<SupportedAppId, string>> = {
+  irc: "https://github.com/kiwiirc/kiwiirc",
+  classicube: "https://github.com/UnknownShadow200/ClassiCube",
+  dxball: "https://habr.com/en/articles/147339/",
+  spacecadet: "https://github.com/alula/SpaceCadetPinball",
+  quake3: "https://github.com/lrusso/Quake3",
+  tic80: "https://tic80.com/",
+  stable: "https://github.com/mlc-ai/web-stable-diffusion",
+  emulator: "https://github.com/EmulatorJS/EmulatorJS",
+  v86: "https://github.com/copy/v86",
+  boxedwine: "https://github.com/danoon2/Boxedwine",
 };
 
 function download(filename: string, data: BlobPart, type = "text/plain") {
@@ -596,23 +564,39 @@ function VimApp() {
   );
 }
 
-function ExternalApp({ app }: { app: SupportedAppId }) {
-  const config = EXTERNAL_APPS[app];
-  if (!config) return null;
+function RuntimeApp({ app }: { app: SupportedAppId }) {
+  const source = APP_SOURCES[app];
+  if (!source) return null;
+
+  if (app !== "spacecadet") {
+    return (
+      <div className="desktop-app desktop-app-empty">
+        <strong>{APP_REGISTRY[app].title} is not installed</strong>
+        <p>
+          This copied menu entry used to open another person&apos;s desktop.
+          It has been disabled until its runtime is integrated here.
+        </p>
+        <a href={source} target="_blank" rel="noopener noreferrer">
+          View the upstream project ↗
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="desktop-app external-workspace">
       <header>
-        <span>{config.note}</span>
-        <a href={config.url} target="_blank" rel="noopener noreferrer">Open separately ↗</a>
+        <span>Local launcher · official Space Cadet runtime</span>
+        <a href={source} target="_blank" rel="noopener noreferrer">Source and licence ↗</a>
       </header>
       <iframe
-        title={`${APP_REGISTRY[app].title} web application`}
-        src={config.url}
-        sandbox="allow-downloads allow-forms allow-pointer-lock allow-popups allow-same-origin allow-scripts"
+        title="Space Cadet Pinball"
+        src="/apps/spacecadet/"
+        sandbox="allow-pointer-lock allow-scripts"
         allow="autoplay; fullscreen; gamepad"
         referrerPolicy="no-referrer"
       />
-      <footer>Isolated from the support router, API key, and customer input.</footer>
+      <footer>The game cannot access the support router, API key, or customer input.</footer>
     </div>
   );
 }
@@ -633,5 +617,5 @@ export function DaedalApp({ id }: { id: AppId }) {
   if (id === "messenger") return <MessengerApp />;
   if (id === "chess") return <ChessApp />;
   if (id === "vim") return <VimApp />;
-  return <ExternalApp app={id as SupportedAppId} />;
+  return <RuntimeApp app={id as SupportedAppId} />;
 }

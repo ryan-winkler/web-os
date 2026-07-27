@@ -15,6 +15,13 @@ The daedalOS MIT copyright and permission notice is retained in
 `DAEDALOS-LICENSE.txt` in the downloadable project. daedalOS marks and its
 bundled third-party game data are not redistributed here.
 
+Space Cadet Pinball has a local, sandboxed launcher that loads the executable
+runtime from the port author’s official host. The runtime is not copied into
+this project.
+
+- Port and licence: https://github.com/alula/SpaceCadetPinball
+- Runtime host: https://pinball.alula.me/
+
 ## jsagayap / CoffeeOS
 
 CoffeeOS by jsagayap is a direct design reference for the approachable

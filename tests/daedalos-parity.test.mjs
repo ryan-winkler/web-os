@@ -54,3 +54,15 @@ test("named productivity apps use their real browser runtimes", async () => {
   assert.match(apps, /@ruffle-rs\/ruffle/);
   assert.match(apps, /application\/pdf/);
 });
+
+test("copied app entries never embed another person's desktop", async () => {
+  const [apps, pinball] = await Promise.all([
+    readFile(new URL("app/desktop/DaedalApps.tsx", root), "utf8"),
+    readFile(new URL("public/apps/spacecadet/index.html", root), "utf8"),
+  ]);
+
+  assert.doesNotMatch(apps, /dustinbrett\.com\/\?app=/);
+  assert.match(apps, /src="\/apps\/spacecadet\/"/);
+  assert.match(pinball, /pinball\.alula\.me\/SpaceCadetPinball\.js/);
+  assert.match(pinball, /Content-Security-Policy/);
+});
