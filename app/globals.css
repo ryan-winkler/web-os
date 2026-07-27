@@ -105,12 +105,15 @@ h1 {
   text-shadow: 0 0 30px rgba(224,224,224,.08);
 }
 h1::after {
-  content: attr(data-text);
+  content: "";
   position: absolute;
-  inset: 3px auto auto 4px;
-  color: var(--magenta);
-  opacity: .1;
-  clip-path: inset(56% 0 24% 0);
+  left: 4px;
+  top: 54%;
+  width: min(46%, 280px);
+  height: 2px;
+  background: var(--magenta);
+  box-shadow: 18px 8px 0 -1px var(--cyan);
+  opacity: .42;
   pointer-events: none;
 }
 .lede {
