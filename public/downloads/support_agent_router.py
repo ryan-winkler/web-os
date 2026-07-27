@@ -517,9 +517,15 @@ def configure_api_key(api_key: str) -> None:
                         headers=headers,
                         body=(await request.aread()).decode(),
                     )
+                    response_headers = {
+                        name: value
+                        for name, value in response.headers.items()
+                        if name.casefold()
+                        not in {"content-encoding", "content-length", "transfer-encoding"}
+                    }
                     return httpx.Response(
                         response.status,
-                        headers=response.headers,
+                        headers=response_headers,
                         content=await response.bytes(),
                         request=request,
                     )

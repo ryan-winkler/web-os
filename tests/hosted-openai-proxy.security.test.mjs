@@ -29,5 +29,6 @@ test("hosted OpenAI access keeps the shared key behind a bounded server proxy", 
   assert.match(router, /output = Runner\.run_sync\(/);
   assert.match(router, /class PyfetchTransport\(httpx\.AsyncBaseTransport\)/);
   assert.match(router, /response = await pyfetch\(/);
+  assert.match(router, /"content-encoding", "content-length", "transfer-encoding"/);
   assert.match(router, /httpx\.AsyncClient\(transport=PyfetchTransport\(\)\)/);
 });
