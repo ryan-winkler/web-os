@@ -860,13 +860,22 @@ def format_report(
     return "\n".join(lines)
 
 
-def _format_agent_failure(stage: str) -> str:
+def _format_agent_failure(stage: str, error: BaseException | None = None) -> str:
     """Return an honest, credential-safe Agents SDK failure message."""
+    detail = ""
+    if error is not None:
+        names = []
+        current = error
+        while current is not None and len(names) < 4:
+            names.append(type(current).__name__)
+            current = current.__cause__ or current.__context__
+        detail = f"\nTechnical detail: {' -> '.join(names)}."
     return (
         f"Error: OpenAI Agents SDK {stage} did not complete.\n"
         "Next action: configure OPENAI_API_KEY or --api-key and retry. "
         "On the website, load a key in the session-only field. If a key is "
         "already configured, verify its access and the network connection."
+        f"{detail}"
     )
 
 
@@ -896,7 +905,7 @@ def process_customer(
             invoke_agent(agents["MultiIssueTriageAgent"], message),
             message,
         )
-    except Exception:
+    except Exception as exc:
         log_event(
             state,
             correlation_id=correlation,
@@ -905,7 +914,7 @@ def process_customer(
             elapsed_ms=int((time.perf_counter() - started) * 1_000),
         )
         return RunOutcome(
-            text=_format_agent_failure("triage"),
+            text=_format_agent_failure("triage", exc),
             triage_failed=True,
             logging_failed=state.failed,
         )
@@ -1348,8 +1357,8 @@ def main() -> int:
     if args.issue is not None and not extended_workflow:
         try:
             print(run_once(args.issue, args.model))
-        except Exception:
-            print(_format_agent_failure("run"), file=sys.stderr)
+        except Exception as exc:
+            print(_format_agent_failure("run", exc), file=sys.stderr)
             return 1
         return 0
 

@@ -292,6 +292,13 @@ class RouterPureTests(unittest.TestCase):
         self.assertNotIn("Customer summary:", result.text)
         self.assertNotIn("Issues found:", result.text)
 
+        secret_error = RuntimeError("sk-secret-that-must-not-appear")
+        secret_error.__cause__ = ValueError("customer data")
+        detail = router._format_agent_failure("triage", secret_error)
+        self.assertIn("Technical detail: RuntimeError -> ValueError.", detail)
+        self.assertNotIn("sk-secret", detail)
+        self.assertNotIn("customer data", detail)
+
     def test_11_specialist_failure_continues_and_formats_all_fields(self):
         with patch.object(
             router,
