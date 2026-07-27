@@ -244,6 +244,17 @@ export default function Desktop() {
       setNow(new Date());
       setRoutedCount(Number(localStorage.getItem("rw-routed-count") || 0));
       setDraftCount(Number(localStorage.getItem("rw-draft-count") || 0));
+      if (window.innerWidth <= 1050) {
+        setWindows((current) =>
+          Object.fromEntries(
+            (Object.keys(current) as AppId[]).map((id) => [
+              id,
+              current[id].open ? { ...current[id], minimized: true } : current[id],
+            ]),
+          ) as Record<AppId, WindowState>,
+        );
+        setDesktopRevealed(true);
+      }
     }, 0);
     const clock = window.setInterval(() => setNow(new Date()), 1000);
     const session = window.setInterval(() => setSessionSeconds((value) => value + 1), 1000);
