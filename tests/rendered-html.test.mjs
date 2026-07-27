@@ -29,6 +29,14 @@ test("renders the finished case study", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("keeps customer reply copy on every routed issue", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /\.map\(\(\{ agent, action, customerReply \}\) => \(\{ agent, action, customerReply, issue:/,
+  );
+});
+
 test("ships the exact downloadable source files", async () => {
   const pairs = [
     ["support_agent_router.py", "../../support_agent_router.py"],

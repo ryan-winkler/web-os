@@ -54,7 +54,7 @@ const routingRules = [
 function routeIssue(input: string): Route[] {
   const routes = routingRules
     .filter(({ pattern }) => pattern.test(input))
-    .map(({ agent, action }) => ({ agent, action, issue: input.trim() }));
+    .map(({ agent, action, customerReply }) => ({ agent, action, customerReply, issue: input.trim() }));
 
   return routes.length
     ? routes
