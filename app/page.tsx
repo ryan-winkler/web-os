@@ -1317,8 +1317,8 @@ function TerminalApp({
     "Run the router with no arguments for browser-native interactive prompts.",
     "Try: python3 support_agent_router.py --help",
     "Try: python test_pure.py",
-    "Agents SDK calls use the real script. A key can be held in this worker session only.",
-    "For the strongest protection, run locally with OPENAI_API_KEY instead.",
+    "Agents SDK calls use the real script and Ryan's server-side €30 allowance by default.",
+    "Open “API access” to use your own session-only key for this tab instead.",
     "",
     'Type "help" for commands. Press Tab to complete commands and options.',
   ];
@@ -1327,7 +1327,8 @@ function TerminalApp({
   const [running, setRunning] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState("Python runtime loads on demand");
   const [workingDirectory, setWorkingDirectory] = useState("/Users/ryan/Desktop");
-  const [keyStatus, setKeyStatus] = useState("No session key loaded");
+  const [keyStatus, setKeyStatus] = useState("No personal key loaded");
+  const [hostedStatus, setHostedStatus] = useState("Checking the hosted allowance…");
   const [terminalTone, setTerminalTone] = useState("blue");
   const [historyCursor, setHistoryCursor] = useState(-1);
   const [browserPrompt, setBrowserPrompt] = useState<"customer-id" | "issue" | null>(null);
@@ -1339,7 +1340,30 @@ function TerminalApp({
   const lastRequestRef = useRef(0);
   const executeRef = useRef<(input: string) => Promise<void>>(async () => undefined);
 
-  useEffect(() => () => workerRef.current?.terminate(), []);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/openai/budget", { cache: "no-store" })
+      .then(async (response) => {
+        const budget = await response.json() as {
+          available?: boolean;
+          remaining_eur?: number;
+          cap_eur?: number;
+        };
+        if (!active) return;
+        setHostedStatus(
+          response.ok && budget.available
+            ? `Hosted allowance: €${Number(budget.remaining_eur ?? 0).toFixed(2)} of €${Number(budget.cap_eur ?? 30).toFixed(2)} remaining`
+            : "Hosted allowance unavailable; use your own key",
+        );
+      })
+      .catch(() => {
+        if (active) setHostedStatus("Hosted allowance unavailable; use your own key");
+      });
+    return () => {
+      active = false;
+      workerRef.current?.terminate();
+    };
+  }, []);
 
   const ensureWorker = () => {
     let worker = workerRef.current;
@@ -1389,8 +1413,8 @@ function TerminalApp({
         ...result.stderr.replace(/\s+$/, "").split("\n").filter(Boolean),
         `[exit ${result.exitCode}]`,
       ];
-      if (/OPENAI_API_KEY|api key/i.test(result.stderr) && keyStatus.startsWith("No session")) {
-        output.push("Load a session-only key above, or run locally with OPENAI_API_KEY.");
+      if (/OPENAI_API_KEY|api key/i.test(result.stderr) && keyStatus.startsWith("No personal")) {
+        output.push("The hosted allowance could not run this request. Open API access to use your own key.");
       }
       return output;
     } finally {
@@ -1405,9 +1429,12 @@ function TerminalApp({
       setKeyStatus("Enter a valid OpenAI key beginning with sk-");
       return;
     }
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    pendingRef.current = null;
     ensureWorker().postMessage({ type: "set-key", apiKey });
     if (input) input.value = "";
-    setKeyStatus("Session key loaded in the isolated worker");
+    setKeyStatus("Personal key loaded in the isolated worker");
   };
 
   const forgetSessionKey = () => {
@@ -1416,7 +1443,7 @@ function TerminalApp({
     pendingRef.current = null;
     if (apiKeyInputRef.current) apiKeyInputRef.current.value = "";
     setRuntimeStatus("Python runtime loads on demand");
-    setKeyStatus("Session key forgotten; worker memory cleared");
+    setKeyStatus("Personal key forgotten; worker memory cleared");
   };
 
   const execute = async (rawInput: string) => {
@@ -1536,7 +1563,11 @@ function TerminalApp({
       `Origin: ${window.location.origin}`,
       "Public IP is not inspected by this local workstation.",
     ];
-    else if (name === "status") output = [`${runtimeStatus} · sending disabled · human review required`];
+    else if (name === "status") output = [
+      runtimeStatus,
+      hostedStatus,
+      `${keyStatus} · sending disabled · human review required`,
+    ];
     else if (name === "route") {
       const issue = args.join(" ");
       output = issue ? [`${routeIssue(issue).route}: ${routeIssue(issue).action}`] : ["usage: route <customer issue>"];
@@ -1643,20 +1674,20 @@ function TerminalApp({
         </div>
       </header>
       <details className="terminal-key-panel">
-        <summary>OpenAI API key · session only</summary>
+        <summary>API access · hosted allowance or your own key</summary>
         <div>
           <input
             ref={apiKeyInputRef}
             type="password"
             autoComplete="off"
             spellCheck={false}
-            aria-label="OpenAI API key held in worker memory for this tab only"
+            aria-label="Your OpenAI API key held in worker memory for this tab only"
             placeholder="sk-…"
           />
           <button type="button" onClick={storeSessionKey}>Use for session</button>
           <button type="button" onClick={forgetSessionKey}>Forget key</button>
         </div>
-        <p>{keyStatus}. Never saved to local storage, terminal history, logs, or source. Local OPENAI_API_KEY is safer.</p>
+        <p>{hostedStatus}. {keyStatus}. Personal keys travel only with the OpenAI request. Never saved to local storage, terminal history, logs, or source.</p>
       </details>
       <div className="terminal-output" aria-live="polite">
         {lines.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}

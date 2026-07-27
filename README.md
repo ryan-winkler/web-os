@@ -15,10 +15,12 @@ An original browser desktop for Ryan's support-agent interview project.
 
 The website is an original implementation. It does not copy code from the
 web-desktop references used for visual research. Its Command Prompt runs the
-shipped files in CPython through Pyodide. A key may be held in isolated worker
-memory for the current tab and explicitly discarded; local `OPENAI_API_KEY`
-remains the recommended path. Drafts remain subject to human review, and Send
-Reply is unavailable until an authenticated messaging API is connected.
+shipped files in CPython through Pyodide. Hosted agent runs use a server-side
+key behind a lifetime €30 application cap, fixed model and output limits,
+per-IP throttling, and a no-tools policy. A visitor can instead use a personal
+key held in isolated worker memory for the current tab and sent over TLS only
+for that visitor's OpenAI request. Drafts remain subject to human review, and
+Send Reply is unavailable until an authenticated messaging API is connected.
 Running `python3 support_agent_router.py` opens browser-native customer
 prompts; press Tab to complete commands, filenames, apps, and reply modes.
 

@@ -85,13 +85,19 @@ OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
 bare `python3 support_agent_router.py` command uses browser-native customer
 prompts before invoking the real one-shot script, because a Web Worker has no
 interactive stdin. Press Tab to complete commands, filenames, apps, and reply
-modes. Without a key, the terminal reports the missing Agents SDK configuration
-directly rather than inventing routing results. The terminal can hold an API key
-inside its isolated Web Worker for the current tab
-only and can explicitly discard that worker. It does not place the key in
-React state, terminal history, local storage, logs, or downloads. A public
-browser app cannot offer the same protection as a local environment variable,
-so local `OPENAI_API_KEY` remains the recommended path.
+modes.
+
+Hosted agent runs use a server-side OpenAI key with a lifetime €30 application
+cap, a fixed `gpt-4.1-mini` model, bounded output, no tools, and anonymous
+per-IP throttling. The key is stored as a hosting secret and never enters the
+browser or repository. A visitor may instead load their own key into the
+isolated Web Worker for the current tab and explicitly discard it. A personal
+key is sent over TLS only for that visitor's OpenAI request through the
+same-origin proxy; it is not placed in React state, terminal history, browser
+storage, logs, or downloads. For local use, `OPENAI_API_KEY` remains the safest
+path. See OpenAI's
+[API-key guidance](https://developers.openai.com/api/docs/guides/production-best-practices#api-keys)
+and [current pricing](https://developers.openai.com/api/docs/pricing).
 
 The desktop also includes a local DOOM manual, Start menu, games, editor,
 calculator, Code Lab, image viewer, local media player, permission-gated camera,

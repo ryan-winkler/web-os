@@ -37,8 +37,9 @@ await micropip.install("openai-agents", reinstall=True)
 
 async function run(command) {
   const { file, args: parsedArgs } = parsePythonCommand(command);
-  const args = file === "support_agent_router.py" && sessionApiKey
-    ? [...parsedArgs, "--api-key", sessionApiKey]
+  const apiBase = `${self.location.origin}/api/openai/v1`;
+  const args = file === "support_agent_router.py"
+    ? [...parsedArgs, "--api-key", sessionApiKey || "sk-site-proxy-not-a-secret"]
     : parsedArgs;
   runtimePromise ??= bootRuntime().catch((error) => {
     runtimePromise = undefined;
@@ -46,10 +47,12 @@ async function run(command) {
   });
   const pyodide = await runtimePromise;
   pyodide.globals.set("_run_spec_json", JSON.stringify({ file, args }));
+  pyodide.globals.set("_openai_base_url", file === "support_agent_router.py" ? apiBase : "");
   const proxy = await pyodide.runPythonAsync(`
 import contextlib
 import io
 import json
+import os
 import runpy
 import sys
 import traceback
@@ -59,8 +62,13 @@ _stdout = io.StringIO()
 _stderr = io.StringIO()
 _exit_code = 0
 _old_argv = sys.argv[:]
+_old_openai_base_url = os.environ.get("OPENAI_BASE_URL")
 
 try:
+    if _openai_base_url:
+        os.environ["OPENAI_BASE_URL"] = _openai_base_url
+    else:
+        os.environ.pop("OPENAI_BASE_URL", None)
     sys.argv = [_spec["file"], *_spec["args"]]
     with contextlib.redirect_stdout(_stdout), contextlib.redirect_stderr(_stderr):
         runpy.run_path(_spec["file"], run_name="__main__")
@@ -71,6 +79,10 @@ except BaseException:
     traceback.print_exc(file=_stderr)
 finally:
     sys.argv = _old_argv
+    if _old_openai_base_url is None:
+        os.environ.pop("OPENAI_BASE_URL", None)
+    else:
+        os.environ["OPENAI_BASE_URL"] = _old_openai_base_url
 
 {
     "stdout": _stdout.getvalue(),

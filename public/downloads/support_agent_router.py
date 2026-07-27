@@ -480,6 +480,13 @@ def configure_api_key(api_key: str) -> None:
         raise ValueError("API key cannot contain control characters.")
     if not api_key.startswith("sk-"):
         raise ValueError("API key must start with 'sk-'.")
+    base_url = os.environ.get("OPENAI_BASE_URL", "").strip()
+    if base_url:
+        from agents import set_default_openai_client
+        from openai import AsyncOpenAI
+
+        set_default_openai_client(AsyncOpenAI(api_key=api_key, base_url=base_url))
+        return
     set_default_openai_key(api_key, use_for_tracing=False)
 
 
