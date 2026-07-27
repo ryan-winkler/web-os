@@ -15,22 +15,34 @@ async function render() {
   );
 }
 
-test("renders the finished case study", async () => {
+test("renders the finished support workstation", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /<title>Support Agent Router — OpenAI Agents SDK<\/title>/i);
-  assert.match(html, /SUPPORT AGENT/);
-  assert.match(html, /Run routing demo/);
-  assert.match(html, /ReplyAgent/);
-  assert.match(html, /Send Reply is intentionally blocked/);
-  assert.match(html, /Thank you to OpenAI/);
+  assert.match(html, /<title>Ryan Winkler — Support Workstation<\/title>/i);
+  assert.match(html, /Ryan Winkler/);
+  assert.match(html, /Support Workbench/);
+  assert.match(html, /DOOM running in js-dos/);
+  assert.match(html, /support_agent_router\.py — CLI/);
+  assert.match(html, /PROCESS\.md/);
+  assert.match(html, /Flash Files/);
   assert.match(html, /support_agent_router\.py/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
+test("includes the reply, safety, and usability workflows", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(source, /Triage & give reply/);
+  assert.match(source, /Sending disabled/);
+  assert.match(source, /Reply not sent/);
+  assert.match(source, /Nielsen heuristic check/);
+  assert.match(source, /ADHD and AuDHD review/);
+  assert.match(source, /Thank you to OpenAI/);
+});
+
 test("ships the exact downloadable source files", async () => {
   const pairs = [
+    ["README.md", "../../README.md"],
     ["support_agent_router.py", "../../support_agent_router.py"],
     ["test_pure.py", "../../test_pure.py"],
     ["test_support_agent_router.py", "../../test_support_agent_router.py"],
@@ -43,6 +55,7 @@ test("ships the exact downloadable source files", async () => {
     assert.equal(published, original);
   }
   await access(new URL("../public/og.png", import.meta.url));
+  await access(new URL("../public/downloads/ATTRIBUTIONS.md", import.meta.url));
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   assert.equal(new URL(".", root).pathname.endsWith("/site/"), true);
 });

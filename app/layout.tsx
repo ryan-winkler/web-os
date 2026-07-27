@@ -5,9 +5,9 @@ import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
-const title = "Support Agent Router — OpenAI Agents SDK";
+const title = "Ryan Winkler — Support Workstation";
 const description =
-  "An interactive case study and downloadable Python CLI for boundary-first, multi-issue support routing with the OpenAI Agents SDK.";
+  "Ryan Winkler's interactive support workstation: specialist routing, human-reviewed customer replies, operational tools, and downloadable interview source.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description,
-    openGraph: { title, description, type: "website", images: [{ url: image, width: 1731, height: 909 }] },
+    openGraph: { title, description, type: "website", images: [{ url: image, width: 1732, height: 908, alt: "Ryan Winkler support workstation" }] },
     twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
