@@ -484,6 +484,37 @@ def _safe_text(value: str) -> str:
     return safe
 
 
+def _fact_is_explicit(fact: CustomerFact, evidence: str, value: str) -> bool:
+    """Require a field-specific cue before accepting model-extracted profile data."""
+    cues = {
+        "organization": (
+            f"{value} is ",
+            f"company {value}",
+            f"organization {value}",
+            f"org {value}",
+            f"from {value}",
+        ),
+        "product": (
+            f"using {value}",
+            f"product {value}",
+            f"website {value}",
+            f"model {value}",
+        ),
+        "region": (
+            f"in {value}",
+            f"region {value}",
+            f"based in {value}",
+        ),
+        "account_tier": (
+            f"{value} plan",
+            f"plan {value}",
+            f"{value} tier",
+            f"tier {value}",
+        ),
+    }
+    return any(cue in evidence for cue in cues[fact.name])
+
+
 def configure_api_key(api_key: str) -> None:
     """Configure one in-memory Agents SDK key without tracing or persistence."""
     if not api_key or api_key != api_key.strip() or len(api_key) > 512:
@@ -571,7 +602,12 @@ def parse_triage_output(output: str, original_message: str) -> TriageOutput:
     for fact in parsed.stated_customer_facts:
         evidence = _normalized_text(fact.evidence)
         value = _normalized_text(fact.value)
-        if evidence in normalized_message and value in evidence and value != evidence:
+        if (
+            evidence in normalized_message
+            and value in evidence
+            and value != evidence
+            and _fact_is_explicit(fact, evidence, value)
+        ):
             valid_facts.append(
                 fact.model_copy(
                     update={

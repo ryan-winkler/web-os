@@ -728,7 +728,12 @@ class RouterPureTests(unittest.TestCase):
                         "name": "organization",
                         "value": message,
                         "evidence": message,
-                    }
+                    },
+                    {
+                        "name": "organization",
+                        "value": "burst",
+                        "evidence": message,
+                    },
                 ],
             ),
             message,
