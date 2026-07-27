@@ -518,11 +518,13 @@ def configure_api_key(api_key: str) -> None:
                         body=(await request.aread()).decode(),
                     )
                     response_headers = {
-                        name: value
-                        for name, value in response.headers.items()
-                        if name.casefold()
-                        not in {"content-encoding", "content-length", "transfer-encoding"}
+                        "content-type": response.headers.get(
+                            "content-type",
+                            "application/json",
+                        )
                     }
+                    if request_id := response.headers.get("x-request-id"):
+                        response_headers["x-request-id"] = request_id
                     return httpx.Response(
                         response.status,
                         headers=response_headers,
