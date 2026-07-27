@@ -98,6 +98,8 @@ storage, logs, or downloads. For local use, `OPENAI_API_KEY` remains the safest
 path. See OpenAI's
 [API-key guidance](https://developers.openai.com/api/docs/guides/production-best-practices#api-keys)
 and [current pricing](https://developers.openai.com/api/docs/pricing).
+The single SDK boundary uses `Runner.run_sync` locally and the async runner
+through Pyodide's supported stack-switching bridge in the browser.
 
 The desktop also includes a local DOOM manual, Start menu, games, editor,
 calculator, Code Lab, image viewer, local media player, permission-gated camera,

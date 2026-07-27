@@ -21,6 +21,8 @@ per-IP throttling, and a no-tools policy. A visitor can instead use a personal
 key held in isolated worker memory for the current tab and sent over TLS only
 for that visitor's OpenAI request. Drafts remain subject to human review, and
 Send Reply is unavailable until an authenticated messaging API is connected.
+The single SDK boundary uses `Runner.run_sync` locally and the async runner
+through Pyodide's supported stack-switching bridge in the browser.
 Running `python3 support_agent_router.py` opens browser-native customer
 prompts; press Tab to complete commands, filenames, apps, and reply modes.
 
