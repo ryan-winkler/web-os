@@ -1,4 +1,5 @@
-const CACHE_NAME = "ryan-workstation-runtime-v5";
+const CACHE_NAME = "ryan-workstation-runtime-v6";
+const ASSET_VERSION = "20260727-6";
 const LOCAL_RUNTIME = new Set([
   "/doom/index.html",
   "/doom/launcher.html",
@@ -43,6 +44,16 @@ const LOCAL_RUNTIME = new Set([
   "/downloads/test_pure.py",
   "/downloads/test_support_agent_router.py",
 ]);
+const VERSIONED_RUNTIME = new Set([
+  "/doom/launcher.html",
+  "/doom/js-dos-api.js",
+  "/doom/js-dos-v3.js",
+  "/python-command.mjs",
+  "/python-worker.mjs",
+  "/downloads/support_agent_router.py",
+  "/downloads/test_pure.py",
+  "/downloads/test_support_agent_router.py",
+]);
 const DOOM_GAME =
   "https://thedoggybrad.github.io/doom_on_js-dos/DOOM-@evilution.zip";
 
@@ -83,7 +94,11 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await Promise.all(
-      [...LOCAL_RUNTIME].map((url) => cache.add(url).catch(() => undefined)),
+      [...LOCAL_RUNTIME].map((url) =>
+        cache
+          .add(VERSIONED_RUNTIME.has(url) ? `${url}?v=${ASSET_VERSION}` : url)
+          .catch(() => undefined),
+      ),
     );
     await cache.add(DOOM_GAME).catch(() => undefined);
     await self.skipWaiting();

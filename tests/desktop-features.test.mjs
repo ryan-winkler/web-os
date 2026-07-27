@@ -15,9 +15,9 @@ test("ships the local help, supplied images, and one complete archive", async ()
   assert.match(manual, /DOOM on JS-DOS User Manual/);
   assert.match(manual, /\| Fire \| S \|/);
   assert.match(doomLauncher, /href="\/downloads\/MANUAL\.md"/);
-  assert.match(doomLauncher, /src="\/doom\/js-dos-api\.js"/);
+  assert.match(doomLauncher, /src="\/doom\/js-dos-api\.js\?v=20260727-6"/);
   assert.match(doomLauncher, /Content-Security-Policy/);
-  assert.match(doomLauncher, /href="\/doom\/js-dos-v3\.js"/);
+  assert.match(doomLauncher, /href="\/doom\/js-dos-v3\.js\?v=20260727-6"/);
   assert.match(doomLauncher, /thedoggybrad\.github\.io\/doom_on_js-dos\/DOOM-@evilution\.zip/);
   assert.doesNotMatch(doomLauncher, /thedoggybrad\.github\.io\/doom_on_js-dos\/(?:js-dos-api|js-dos-v3|DOOM\.png)/);
   assert.match(doomApi, /\/doom\/js-dos-v3\.js/);
@@ -39,7 +39,8 @@ test("uses the real Python boundary, warms it once, and preserves the public-sit
     readFile(new URL("app/layout.tsx", root), "utf8"),
     readFile(new URL("public/sw.js", root), "utf8"),
   ]);
-  assert.match(page, /new Worker\("\/python-worker\.mjs(?:\?v=[^"]+)?"/);
+  assert.match(page, /new Worker\(`\/python-worker\.mjs\?v=\$\{RUNTIME_ASSET_VERSION\}`/);
+  assert.match(page, /support-agent-router-interview\.zip\?v=\$\{RUNTIME_ASSET_VERSION\}/);
   assert.match(page, /AI Support Engineer \(hopefully\)/);
   assert.match(page, /session-only key/i);
   assert.match(page, /Never saved to local storage, terminal history, logs, or source/i);
@@ -56,7 +57,8 @@ test("uses the real Python boundary, warms it once, and preserves the public-sit
   assert.match(worker, /type: "ready"/);
   assert.match(worker, /sessionApiKey/);
   assert.match(worker, /\[secret redacted\]/);
-  assert.match(layout, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
+  assert.match(layout, /navigator\.serviceWorker\.register\("\/sw\.js\?v=20260727-6"\)/);
+  assert.match(serviceWorker, /const VERSIONED_RUNTIME = new Set/);
   assert.match(serviceWorker, /DOOM-@evilution\.zip/);
   assert.match(serviceWorker, /cdn\.jsdelivr\.net/);
   assert.match(serviceWorker, /files\.pythonhosted\.org/);

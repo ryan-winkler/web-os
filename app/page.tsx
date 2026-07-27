@@ -142,7 +142,8 @@ const INITIAL_WINDOWS = Object.fromEntries(
 const DEFAULT_ISSUE =
   "We are seeing intermittent 429s during traffic bursts and customers are waiting too long for a response.";
 const PUBLIC_APPS = APP_IDS;
-const DOWNLOAD_ARCHIVE = "/downloads/support-agent-router-interview.zip";
+const RUNTIME_ASSET_VERSION = "20260727-6";
+const DOWNLOAD_ARCHIVE = `/downloads/support-agent-router-interview.zip?v=${RUNTIME_ASSET_VERSION}`;
 const SEARCH_COMMANDS = [
   { title: "Router help", command: "python3 support_agent_router.py --help", keywords: "python cli argparse" },
   { title: "Run pure tests", command: "python test_pure.py", keywords: "test offline no network" },
@@ -1485,7 +1486,7 @@ function TerminalApp({
   const ensureWorker = useCallback(() => {
     let worker = workerRef.current;
     if (!worker) {
-      worker = new Worker("/python-worker.mjs?v=20260727-5", { type: "module" });
+      worker = new Worker(`/python-worker.mjs?v=${RUNTIME_ASSET_VERSION}`, { type: "module" });
       workerRef.current = worker;
       worker.onmessage = ({ data }: MessageEvent<{ type: string; message?: string } & PythonRunResult>) => {
         if (data.type === "progress") {
@@ -1922,7 +1923,7 @@ function DoomApp() {
   return (
     <div className="doom-app">
       <iframe
-        src="/doom/launcher.html"
+        src={`/doom/launcher.html?v=${RUNTIME_ASSET_VERSION}`}
         title="DOOM running in js-dos"
         allow="autoplay; fullscreen; gamepad"
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-downloads"

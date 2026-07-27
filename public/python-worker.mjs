@@ -1,8 +1,8 @@
 import { loadPyodide } from "./pyodide/pyodide.mjs";
-import { parsePythonCommand } from "./python-command.mjs";
+import { parsePythonCommand } from "./python-command.mjs?v=20260727-6";
 
 const INDEX_URL = "/pyodide/";
-const RUNTIME_VERSION = "20260727-5";
+const RUNTIME_VERSION = "20260727-6";
 const FILES = [
   "support_agent_router.py",
   "test_pure.py",

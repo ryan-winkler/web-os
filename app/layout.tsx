@@ -31,7 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           dangerouslySetInnerHTML={{
             __html:
-              'if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});',
+              'if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js?v=20260727-6").catch(() => {});',
           }}
         />
       </body>
