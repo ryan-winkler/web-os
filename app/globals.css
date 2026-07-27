@@ -26,7 +26,7 @@ button, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { color: #08080c; background: var(--green); }
 
-main { min-height: 100vh; overflow: hidden; position: relative; }
+main { min-height: 100vh; overflow-x: clip; position: relative; }
 .scanlines {
   position: fixed;
   inset: 0;
