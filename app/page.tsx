@@ -2215,6 +2215,7 @@ function PaintApp({ onBack }: { onBack: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const [colour, setColour] = useState("#76a9ff");
+  const [hasDrawing, setHasDrawing] = useState(false);
   const draw = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!drawingRef.current) return;
     const canvas = canvasRef.current;
@@ -2235,10 +2236,12 @@ function PaintApp({ onBack }: { onBack: () => void }) {
   const clear = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (hasDrawing && !window.confirm("Clear this drawing?")) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.fillStyle = "#07101d";
     context.fillRect(0, 0, canvas.width, canvas.height);
+    setHasDrawing(false);
   };
   const download = () => {
     const anchor = document.createElement("a");
@@ -2259,6 +2262,7 @@ function PaintApp({ onBack }: { onBack: () => void }) {
           height="520"
           onPointerDown={(event) => {
             drawingRef.current = true;
+            setHasDrawing(true);
             event.currentTarget.setPointerCapture(event.pointerId);
             const context = event.currentTarget.getContext("2d");
             if (!context) return;
