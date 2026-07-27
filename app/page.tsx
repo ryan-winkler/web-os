@@ -1923,7 +1923,7 @@ function DoomApp() {
   return (
     <div className="doom-app">
       <iframe
-        src={`/doom/launcher.html?v=${RUNTIME_ASSET_VERSION}`}
+        src={`/doom/launcher?v=${RUNTIME_ASSET_VERSION}`}
         title="DOOM running in js-dos"
         allow="autoplay; fullscreen; gamepad"
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-downloads"

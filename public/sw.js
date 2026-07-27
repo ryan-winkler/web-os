@@ -1,8 +1,9 @@
-const CACHE_NAME = "ryan-workstation-runtime-v6";
-const ASSET_VERSION = "20260727-6";
+const CACHE_NAME = "ryan-workstation-runtime-v7";
+const ASSET_VERSION = "20260728-1";
+const LEGACY_DOOM_LAUNCHER = "/doom/launcher.html";
 const LOCAL_RUNTIME = new Set([
   "/doom/index.html",
-  "/doom/launcher.html",
+  "/doom/launcher",
   "/doom/js-dos-api.js",
   "/doom/js-dos-v3.js",
   "/python-command.mjs",
@@ -45,7 +46,7 @@ const LOCAL_RUNTIME = new Set([
   "/downloads/test_support_agent_router.py",
 ]);
 const VERSIONED_RUNTIME = new Set([
-  "/doom/launcher.html",
+  "/doom/launcher",
   "/doom/js-dos-api.js",
   "/doom/js-dos-v3.js",
   "/python-command.mjs",
@@ -120,5 +121,19 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+  if (url.pathname === LEGACY_DOOM_LAUNCHER) {
+    const canonicalUrl = new URL("/doom/launcher", url);
+    canonicalUrl.search = url.search;
+    event.respondWith(
+      cacheFirst(
+        new Request(canonicalUrl, {
+          credentials: "same-origin",
+          headers: event.request.headers,
+          redirect: "follow",
+        }),
+      ),
+    );
+    return;
+  }
   if (isRuntimeRequest(url)) event.respondWith(cacheFirst(event.request));
 });

@@ -57,7 +57,7 @@ test("uses the real Python boundary, warms it once, and preserves the public-sit
   assert.match(worker, /type: "ready"/);
   assert.match(worker, /sessionApiKey/);
   assert.match(worker, /\[secret redacted\]/);
-  assert.match(layout, /navigator\.serviceWorker\.register\("\/sw\.js\?v=20260727-6"\)/);
+  assert.match(layout, /navigator\.serviceWorker\.register\("\/sw\.js\?v=20260728-1"\)/);
   assert.match(serviceWorker, /const VERSIONED_RUNTIME = new Set/);
   assert.match(serviceWorker, /DOOM-@evilution\.zip/);
   assert.match(serviceWorker, /cdn\.jsdelivr\.net/);

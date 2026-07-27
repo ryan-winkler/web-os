@@ -55,14 +55,43 @@ test("named productivity apps use their real browser runtimes", async () => {
   assert.match(apps, /application\/pdf/);
 });
 
-test("copied app entries never embed another person's desktop", async () => {
+test("copied app entries launch direct app runtimes, never another desktop", async () => {
   const [apps, pinball] = await Promise.all([
     readFile(new URL("app/desktop/DaedalApps.tsx", root), "utf8"),
     readFile(new URL("public/apps/spacecadet/index.html", root), "utf8"),
   ]);
 
   assert.doesNotMatch(apps, /dustinbrett\.com\/\?app=/);
-  assert.match(apps, /src="\/apps\/spacecadet\/"/);
+  assert.doesNotMatch(apps, /is not installed/);
+  assert.match(apps, /runtime: "\/apps\/spacecadet\/"/);
+  for (const runtime of [
+    "kiwiirc.com/nextclient/",
+    "classicube.net/server/play/",
+    "sqmscm.github.io/dxball/",
+    "lrusso.github.io/Quake3/Quake3.htm",
+    "tic80.com/play",
+    "websd.mlc.ai/",
+    "emulatorjs.github.io/EmulatorJS/",
+    "copy.sh/v86/",
+    "boxedwine.org/demo/",
+  ]) {
+    assert.match(apps, new RegExp(runtime.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
   assert.match(pinball, /pinball\.alula\.me\/SpaceCadetPinball\.js/);
   assert.match(pinball, /Content-Security-Policy/);
+});
+
+test("DOOM uses the canonical launcher path and repairs legacy html requests", async () => {
+  const [page, layout, serviceWorker] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/layout.tsx", root), "utf8"),
+    readFile(new URL("public/sw.js", root), "utf8"),
+  ]);
+
+  assert.match(page, /src=\{`\/doom\/launcher\?v=\$\{RUNTIME_ASSET_VERSION\}`\}/);
+  assert.doesNotMatch(page, /src=\{`\/doom\/launcher\.html/);
+  assert.match(layout, /navigator\.serviceWorker\.register\("\/sw\.js\?v=20260728-1"\)/);
+  assert.match(serviceWorker, /LEGACY_DOOM_LAUNCHER/);
+  assert.match(serviceWorker, /url\.pathname === LEGACY_DOOM_LAUNCHER/);
+  assert.match(serviceWorker, /\/doom\/launcher/);
 });

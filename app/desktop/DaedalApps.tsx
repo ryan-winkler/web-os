@@ -25,17 +25,49 @@ type SupportedAppId = Exclude<
   | "help"
 >;
 
-const APP_SOURCES: Partial<Record<SupportedAppId, string>> = {
-  irc: "https://github.com/kiwiirc/kiwiirc",
-  classicube: "https://github.com/UnknownShadow200/ClassiCube",
-  dxball: "https://habr.com/en/articles/147339/",
-  spacecadet: "https://github.com/alula/SpaceCadetPinball",
-  quake3: "https://github.com/lrusso/Quake3",
-  tic80: "https://tic80.com/",
-  stable: "https://github.com/mlc-ai/web-stable-diffusion",
-  emulator: "https://github.com/EmulatorJS/EmulatorJS",
-  v86: "https://github.com/copy/v86",
-  boxedwine: "https://github.com/danoon2/Boxedwine",
+const APP_RUNTIMES: Partial<
+  Record<SupportedAppId, { runtime: string; source: string }>
+> = {
+  irc: {
+    runtime: "https://kiwiirc.com/nextclient/",
+    source: "https://github.com/kiwiirc/kiwiirc",
+  },
+  classicube: {
+    runtime: "https://www.classicube.net/server/play/",
+    source: "https://github.com/UnknownShadow200/ClassiCube",
+  },
+  dxball: {
+    runtime: "https://sqmscm.github.io/dxball/",
+    source: "https://github.com/sqmscm/dxball",
+  },
+  spacecadet: {
+    runtime: "/apps/spacecadet/",
+    source: "https://github.com/alula/SpaceCadetPinball",
+  },
+  quake3: {
+    runtime: "https://lrusso.github.io/Quake3/Quake3.htm",
+    source: "https://github.com/lrusso/Quake3",
+  },
+  tic80: {
+    runtime: "https://tic80.com/play",
+    source: "https://github.com/nesbox/TIC-80",
+  },
+  stable: {
+    runtime: "https://websd.mlc.ai/",
+    source: "https://github.com/mlc-ai/web-stable-diffusion",
+  },
+  emulator: {
+    runtime: "https://emulatorjs.github.io/EmulatorJS/",
+    source: "https://github.com/EmulatorJS/EmulatorJS",
+  },
+  v86: {
+    runtime: "https://copy.sh/v86/",
+    source: "https://github.com/copy/v86",
+  },
+  boxedwine: {
+    runtime: "https://www.boxedwine.org/demo/",
+    source: "https://github.com/danoon2/Boxedwine",
+  },
 };
 
 function download(filename: string, data: BlobPart, type = "text/plain") {
@@ -565,38 +597,28 @@ function VimApp() {
 }
 
 function RuntimeApp({ app }: { app: SupportedAppId }) {
-  const source = APP_SOURCES[app];
-  if (!source) return null;
-
-  if (app !== "spacecadet") {
-    return (
-      <div className="desktop-app desktop-app-empty">
-        <strong>{APP_REGISTRY[app].title} is not installed</strong>
-        <p>
-          This copied menu entry used to open another person&apos;s desktop.
-          It has been disabled until its runtime is integrated here.
-        </p>
-        <a href={source} target="_blank" rel="noopener noreferrer">
-          View the upstream project ↗
-        </a>
-      </div>
-    );
-  }
+  const runtime = APP_RUNTIMES[app];
+  if (!runtime) return null;
+  const local = runtime.runtime.startsWith("/");
 
   return (
     <div className="desktop-app external-workspace">
       <header>
-        <span>Local launcher · official Space Cadet runtime</span>
-        <a href={source} target="_blank" rel="noopener noreferrer">Source and licence ↗</a>
+        <span>{local ? "Local launcher" : "Direct upstream app"} · sandboxed</span>
+        <a href={runtime.source} target="_blank" rel="noopener noreferrer">Source and licence ↗</a>
       </header>
       <iframe
-        title="Space Cadet Pinball"
-        src="/apps/spacecadet/"
-        sandbox="allow-pointer-lock allow-scripts"
+        title={APP_REGISTRY[app].title}
+        src={runtime.runtime}
+        sandbox={
+          local
+            ? "allow-pointer-lock allow-scripts"
+            : "allow-downloads allow-forms allow-pointer-lock allow-popups allow-same-origin allow-scripts"
+        }
         allow="autoplay; fullscreen; gamepad"
         referrerPolicy="no-referrer"
       />
-      <footer>The game cannot access the support router, API key, or customer input.</footer>
+      <footer>This app cannot access the support router, API key, or customer input.</footer>
     </div>
   );
 }
