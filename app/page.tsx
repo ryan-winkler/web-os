@@ -1898,13 +1898,13 @@ function ImageViewer({ onBack }: { onBack: () => void }) {
         <aside>
           {images.map((item, index) => (
             <button key={item.name} className={selected === index ? "active" : ""} onClick={() => setSelected(index)}>
-              <Image src={item.src} width={120} height={72} alt="" />
+              <Image src={item.src} width={120} height={72} alt="" unoptimized />
               <span>{item.name}</span>
             </button>
           ))}
         </aside>
         <figure>
-          <Image src={image.src} width={image.width} height={image.height} alt={image.name} />
+          <Image src={image.src} width={image.width} height={image.height} alt={image.name} unoptimized />
           <figcaption>{image.name} · {image.width} × {image.height}</figcaption>
         </figure>
       </div>
@@ -2114,7 +2114,7 @@ function WallpaperStudio({
         <header><span className="app-eyebrow">Desktop appearance</span><h2>Choose a workspace.</h2></header>
         <div>
           <button className={wallpaper === "sunset" ? "active" : ""} onClick={() => setWallpaper("sunset")}>
-            <Image src="/wallpaper.png" width={480} height={270} alt="Sunset ocean wallpaper" />
+            <Image src="/wallpaper.png" width={480} height={270} alt="Sunset ocean wallpaper" unoptimized />
             <span><strong>Input to meaning</strong><small>Supplied project image</small></span>
           </button>
           <button className={`teal-wallpaper-choice ${wallpaper === "teal" ? "active" : ""}`} onClick={() => setWallpaper("teal")}>
@@ -2487,6 +2487,7 @@ function AboutApp({ openApp }: { openApp: (id: AppId) => void }) {
         width="998"
         height="612"
         alt="Ryan's Codex profile card showing activity and usage statistics"
+        unoptimized
       />
       <header className="profile-hero">
         <div className="profile-mark">RW</div>
