@@ -19,6 +19,8 @@ shipped files in CPython through Pyodide. A key may be held in isolated worker
 memory for the current tab and explicitly discarded; local `OPENAI_API_KEY`
 remains the recommended path. Drafts remain subject to human review, and Send
 Reply is unavailable until an authenticated messaging API is connected.
+Running `python3 support_agent_router.py` opens browser-native customer
+prompts; press Tab to complete commands, filenames, apps, and reply modes.
 
 ## Local development
 

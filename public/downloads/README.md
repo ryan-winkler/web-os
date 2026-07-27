@@ -77,6 +77,10 @@ The accompanying website runs these exact Python files in CPython compiled to
 WebAssembly with Pyodide. The first Python command loads the runtime and the
 OpenAI Agents SDK; later commands reuse it. `python test_pure.py`,
 `python test_support_agent_router.py`, and CLI help run in the browser. The
+bare `python3 support_agent_router.py` command uses browser-native customer
+prompts before invoking the real one-shot script, because a Web Worker has no
+interactive stdin. Press Tab to complete commands, filenames, apps, and reply
+modes. The
 terminal can hold an API key inside its isolated Web Worker for the current tab
 only and can explicitly discard that worker. It does not place the key in
 React state, terminal history, local storage, logs, or downloads. A public
